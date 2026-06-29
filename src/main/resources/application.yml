@@ -20,6 +20,9 @@ spring:
     enabled: true
     baseline-on-migrate: true
 
+point:
+  earn-rate: "0.01"
+
 server:
   port: 8080
 
