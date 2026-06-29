@@ -12,6 +12,7 @@ enum class ErrorCode(
     CONCURRENT_MODIFICATION(HttpStatus.CONFLICT, "동시 수정이 감지되었습니다"),
     LOCK_ACQUISITION_FAILED(HttpStatus.SERVICE_UNAVAILABLE, "처리 중입니다. 잠시 후 다시 시도해주세요"),
     IDEMPOTENCY_DUPLICATE(HttpStatus.OK, "이미 처리된 요청입니다"),
+    UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다"),
 
     // Region
     REGION_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "운영 중인 지자체가 아닙니다"),
