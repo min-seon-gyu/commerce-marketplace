@@ -69,4 +69,54 @@ class PointEarnService(
         meterRegistry.counter("point.earn.count").increment()
         return earnAmount
     }
+
+    /**
+     * 적립 취소(보상). redemption 취소 시 호출되며, 원 redemption이 적립한 포인트를 역분개한다.
+     * 반드시 **호출자의 활성 취소 트랜잭션 내부에서 동기**로 실행한다(별도 @Transactional 없음 —
+     * TransactionCancelService의 TransactionTemplate가 트랜잭션을 제공한다).
+     *
+     * 보상 트랜잭션 규율(원 EARN 행 불변 보존):
+     * - 원 EARN [PointTransaction]은 수정/삭제하지 않는다.
+     * - 새 CANCELLATION 원장쌍 + 새 CANCEL [PointTransaction]으로 역분개를 기록한다.
+     *
+     * 멱등/0원 처리: sourceTransactionId에 해당하는 EARN이 없거나(이미 롤백/미적립) 합계가 0이면 no-op.
+     *
+     * @param sourceTransactionId 원 redemption 거래 id (EARN 행의 sourceTransactionId)
+     * @param compensatingTransactionId 보상(취소) 거래 id (역분개 원장 행이 매달릴 거래)
+     */
+    fun reverseEarn(memberId: Long, sourceTransactionId: Long, compensatingTransactionId: Long) {
+        val earnedAmount = pointTransactionRepository.findBySourceTransactionId(sourceTransactionId)
+            .filter { it.type == PointTransactionType.EARN }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.amount }
+        if (earnedAmount.signum() <= 0) return
+
+        // 캐시 잔액 차감을 SELECT FOR UPDATE로 직렬화(동시 적립/취소 경합 방지).
+        // EARN이 존재하므로 계좌도 반드시 존재한다.
+        val account = pointAccountRepository.findByMemberIdForUpdate(memberId)
+            ?: return
+        account.deduct(earnedAmount)
+
+        // 감사 추적: CANCEL PointTransaction (원 EARN의 sourceTransactionId 공유, 양수 금액).
+        pointTransactionRepository.save(
+            PointTransaction(
+                memberId = memberId,
+                type = PointTransactionType.CANCEL,
+                amount = earnedAmount,
+                balanceAfter = account.balance,
+                sourceTransactionId = sourceTransactionId,
+            )
+        )
+
+        // EARN(DEBIT POINT_BALANCE / CREDIT POINT_FUNDING)의 정확한 역분개:
+        // DEBIT POINT_FUNDING / CREDIT POINT_BALANCE → POINT_BALANCE net이 0으로 복귀.
+        ledgerService.record(
+            debitAccount = AccountCode.POINT_FUNDING,
+            creditAccount = AccountCode.POINT_BALANCE,
+            amount = earnedAmount,
+            transactionId = compensatingTransactionId,
+            entryType = LedgerEntryType.CANCELLATION,
+        )
+
+        meterRegistry.counter("point.cancel.count").increment()
+    }
 }

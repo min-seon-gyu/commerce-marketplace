@@ -5,6 +5,7 @@ import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntryType
+import com.commerce.point.application.PointEarnService
 import com.commerce.promotion.domain.CouponRedemption
 import com.commerce.promotion.infrastructure.CouponJpaRepository
 import com.commerce.promotion.infrastructure.CouponRedemptionJpaRepository
@@ -31,6 +32,7 @@ class TransactionCancelService(
     private val couponRedemptionRepository: CouponRedemptionJpaRepository,
     private val couponRepository: CouponJpaRepository,
     private val budgetManager: PromotionBudgetManager,
+    private val pointEarnService: PointEarnService,
 ) {
 
     /**
@@ -92,6 +94,10 @@ class TransactionCancelService(
             val voucher = voucherRepository.findByIdForUpdate(voucherId)
                 ?: throw BusinessException(ErrorCode.ENTITY_NOT_FOUND)
             voucher.restoreBalance(original.amount)
+
+            // 포인트 적립 역분개(동기, 같은 취소 트랜잭션 내부). 원 redemption txId 기준으로 EARN을 찾아
+            // CANCELLATION 원장쌍 + CANCEL PointTransaction으로 보상한다. 적립이 없었으면 no-op.
+            pointEarnService.reverseEarn(voucher.memberId, transactionId, compensating.id)
 
             eventPublisher.publishEvent(
                 TransactionCancelledEvent(original.id, voucherId, original.amount)
@@ -158,6 +164,10 @@ class TransactionCancelService(
             coupon.cancel()
             couponRedemption.markCancelled()
             couponRedemptionRepository.save(couponRedemption)
+
+            // 포인트 적립 역분개(동기, 같은 취소 트랜잭션 내부). 결합결제 적립 기준은 T−D(voucherCharged)이며
+            // 전액 쿠폰(voucherCharged==0)이면 EARN이 없어 reverseEarn은 no-op.
+            pointEarnService.reverseEarn(voucher.memberId, transactionId, compensating.id)
 
             eventPublisher.publishEvent(
                 TransactionCancelledEvent(original.id, voucherId, original.amount)

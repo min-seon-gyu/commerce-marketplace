@@ -118,17 +118,32 @@ class E2EFlowTest : IntegrationTestSupport() {
         compensatingTx.originalTransactionId shouldBe result.transactionId
 
         // 5. 역방향 원장 엔트리 확인
+        //    바우처 역분개 2행 + 포인트 적립 역분개 2행 = 4행 (30,000 결제 → 적립률 0.01 → 300 포인트)
         val compensatingEntries = ledgerRepository.findByTransactionId(compensatingTxId)
-        compensatingEntries.size shouldBe 2
-        // 원래 결제: debit MERCHANT_RECEIVABLE, credit VOUCHER_BALANCE
-        // 보상: debit VOUCHER_BALANCE, credit MERCHANT_RECEIVABLE (역방향)
-        val debit = compensatingEntries.first { it.side == LedgerEntrySide.DEBIT }
-        val credit = compensatingEntries.first { it.side == LedgerEntrySide.CREDIT }
-        debit.account.name shouldBe "VOUCHER_BALANCE"
-        credit.account.name shouldBe "MERCHANT_RECEIVABLE"
+        compensatingEntries.size shouldBe 4
+        // 바우처 보상: debit VOUCHER_BALANCE 30000 / credit MERCHANT_RECEIVABLE 30000 (역방향)
+        compensatingEntries.count {
+            it.account.name == "VOUCHER_BALANCE" && it.side == LedgerEntrySide.DEBIT &&
+                it.amount.compareTo(BigDecimal("30000")) == 0
+        } shouldBe 1
+        compensatingEntries.count {
+            it.account.name == "MERCHANT_RECEIVABLE" && it.side == LedgerEntrySide.CREDIT &&
+                it.amount.compareTo(BigDecimal("30000")) == 0
+        } shouldBe 1
+        // 포인트 적립 역분개: debit POINT_FUNDING 300 / credit POINT_BALANCE 300 (CANCELLATION)
+        compensatingEntries.count {
+            it.account.name == "POINT_FUNDING" && it.side == LedgerEntrySide.DEBIT &&
+                it.amount.compareTo(BigDecimal("300")) == 0
+        } shouldBe 1
+        compensatingEntries.count {
+            it.account.name == "POINT_BALANCE" && it.side == LedgerEntrySide.CREDIT &&
+                it.amount.compareTo(BigDecimal("300")) == 0
+        } shouldBe 1
 
-        // 6. 원장 정합성
-        verificationService.verify().isBalanced shouldBe true
+        // 6. 원장 정합성 (포인트 잔액 일치 포함)
+        val verify = verificationService.verify()
+        verify.isBalanced shouldBe true
+        verify.pointBalanceMatches shouldBe true
     }
 
     @Test

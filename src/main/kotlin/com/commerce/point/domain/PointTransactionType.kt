@@ -1,6 +1,7 @@
 package com.commerce.point.domain
 
-// MUST 범위는 적립 전용. STRETCH(별도 계획): SPEND, EXPIRE, CANCEL.
+// EARN: 적립. CANCEL: 적립 취소(보상). STRETCH(별도 계획): SPEND, EXPIRE.
 enum class PointTransactionType {
-    EARN
+    EARN,
+    CANCEL,
 }

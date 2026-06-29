@@ -5,6 +5,9 @@ import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntrySide
 import com.commerce.ledger.domain.LedgerEntryType
+import com.commerce.point.domain.PointTransactionType
+import com.commerce.point.infrastructure.PointAccountJpaRepository
+import com.commerce.point.infrastructure.PointTransactionJpaRepository
 import com.commerce.promotion.application.RedemptionOrchestrator
 import com.commerce.promotion.domain.CouponStatus
 import com.commerce.promotion.domain.DiscountType
@@ -36,6 +39,8 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
     @Autowired lateinit var budgetManager: PromotionBudgetManager
     @Autowired lateinit var verificationService: LedgerVerificationService
     @Autowired lateinit var ledgerService: LedgerService
+    @Autowired lateinit var pointAccountRepository: PointAccountJpaRepository
+    @Autowired lateinit var pointTransactionRepository: PointTransactionJpaRepository
 
     private var regionId: Long = 0
     private var memberId: Long = 0
@@ -78,13 +83,21 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
         // 원 거래 CANCELLED, 보상 거래 COMPLETED
         transactionRepository.findById(result.transactionId).get().status shouldBe TransactionStatus.CANCELLED
         transactionRepository.findById(compensatingTxId).get().status shouldBe TransactionStatus.COMPLETED
-        // 글로벌 정합성 유지
-        verificationService.verify().isBalanced shouldBe true
+        // 글로벌 정합성 유지 (포인트 잔액 일치 포함)
+        val verify = verificationService.verify()
+        verify.isBalanced shouldBe true
+        verify.pointBalanceMatches shouldBe true
 
-        // Fix 2: 보상 취소 tx의 정확한 역분개 행 직접 검증 (T=10000, D=3000, voucherCharged=7000)
-        // cancelWithCoupon 내부: pair1(voucherCharged=7000) + pair2(discount=3000) → 4 entries
+        // I1: 적립 포인트(T-D=7000 * 0.01 = 70)도 역분개 → balance 0, CANCEL PointTransaction 적재
+        pointAccountRepository.findByMemberId(memberId)!!.balance.compareTo(BigDecimal.ZERO) shouldBe 0
+        pointTransactionRepository.findBySourceTransactionId(result.transactionId).count {
+            it.type == PointTransactionType.CANCEL && it.amount.compareTo(BigDecimal("70")) == 0
+        } shouldBe 1
+
+        // Fix 2 + I1: 보상 취소 tx의 정확한 역분개 행 직접 검증 (T=10000, D=3000, voucherCharged=7000)
+        // cancelWithCoupon 내부: pair1(voucherCharged=7000) + pair2(discount=3000) + 포인트 역분개(70) → 6 entries
         val cancelEntries = ledgerService.getEntriesByTransactionId(compensatingTxId)
-        cancelEntries.size shouldBe 4
+        cancelEntries.size shouldBe 6
         // 쌍1 역분개: DEBIT VOUCHER_BALANCE 7000 / CREDIT MERCHANT_RECEIVABLE 7000 (CANCELLATION)
         cancelEntries.count {
             it.account == AccountCode.VOUCHER_BALANCE &&
@@ -110,6 +123,19 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
             it.account == AccountCode.MERCHANT_RECEIVABLE &&
             it.side == LedgerEntrySide.CREDIT &&
             it.amount.compareTo(BigDecimal("3000")) == 0 &&
+            it.entryType == LedgerEntryType.CANCELLATION
+        } shouldBe 1
+        // I1 포인트 적립 역분개: DEBIT POINT_FUNDING 70 / CREDIT POINT_BALANCE 70 (CANCELLATION)
+        cancelEntries.count {
+            it.account == AccountCode.POINT_FUNDING &&
+            it.side == LedgerEntrySide.DEBIT &&
+            it.amount.compareTo(BigDecimal("70")) == 0 &&
+            it.entryType == LedgerEntryType.CANCELLATION
+        } shouldBe 1
+        cancelEntries.count {
+            it.account == AccountCode.POINT_BALANCE &&
+            it.side == LedgerEntrySide.CREDIT &&
+            it.amount.compareTo(BigDecimal("70")) == 0 &&
             it.entryType == LedgerEntryType.CANCELLATION
         } shouldBe 1
     }
