@@ -1,12 +1,9 @@
 package com.commerce.integration
 
 import com.commerce.config.JwtTokenProvider
-import com.commerce.point.domain.PointAccount
-import com.commerce.point.domain.PointTransaction
-import com.commerce.point.domain.PointTransactionType
-import com.commerce.point.infrastructure.PointAccountJpaRepository
-import com.commerce.point.infrastructure.PointTransactionJpaRepository
 import com.commerce.support.IntegrationTestSupport
+import com.commerce.support.TestFixtures
+import com.commerce.voucher.application.VoucherRedemptionService
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc
@@ -19,8 +16,8 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
 
     @Autowired lateinit var mockMvc: MockMvc
     @Autowired lateinit var jwtTokenProvider: JwtTokenProvider
-    @Autowired lateinit var pointAccountRepository: PointAccountJpaRepository
-    @Autowired lateinit var pointTransactionRepository: PointTransactionJpaRepository
+    @Autowired lateinit var fixtures: TestFixtures
+    @Autowired lateinit var redemptionService: VoucherRedemptionService
 
     // ── Fix 1: cross-member guard ────────────────────────────────────────────
 
@@ -48,29 +45,23 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
 
     @Test
     fun `own points returns 200 with balance and history`() {
-        val memberId = 9100L
+        // Use the real earn path so the POINT_BALANCE/POINT_FUNDING ledger legs are posted
+        // atomically with the PointAccount update — keeping the global invariant intact.
+        val region = fixtures.createRegion()
+        val owner = fixtures.createMember()
+        val merchant = fixtures.createMerchant(region, owner)
+        val member = fixtures.createMember()
+        // Redeem full face value: 50000 * 1% earn-rate = 500 points
+        val voucher = fixtures.issueVoucher(member.id, region.id, BigDecimal("50000"))
+        redemptionService.redeem(voucher.id, merchant.id, BigDecimal("50000"))
 
-        // Seed a PointAccount and one EARN transaction directly (no full redeem flow needed).
-        pointAccountRepository.save(
-            PointAccount(memberId = memberId, balance = BigDecimal("500"))
-        )
-        pointTransactionRepository.save(
-            PointTransaction(
-                memberId = memberId,
-                type = PointTransactionType.EARN,
-                amount = BigDecimal("500"),
-                balanceAfter = BigDecimal("500"),
-                sourceTransactionId = 999_001L,
-            )
-        )
+        val token = jwtTokenProvider.generateToken(member.id, "USER")
 
-        val token = jwtTokenProvider.generateToken(memberId, "USER")
-
-        mockMvc.get("/api/v1/members/$memberId/points") {
+        mockMvc.get("/api/v1/members/${member.id}/points") {
             header("Authorization", "Bearer $token")
         }.andExpect {
             status { isOk() }
-            jsonPath("$.memberId") { value(memberId) }
+            jsonPath("$.memberId") { value(member.id) }
             jsonPath("$.balance") { value(500) }
             jsonPath("$.history.length()") { value(1) }
             jsonPath("$.history[0].type") { value("EARN") }
