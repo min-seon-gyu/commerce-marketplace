@@ -17,6 +17,7 @@ import com.commerce.voucher.application.VoucherRedemptionService
 import com.commerce.voucher.domain.event.VoucherRedeemedEvent
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
 import com.commerce.voucher.infrastructure.VoucherLockManager
+import com.commerce.point.application.PointEarnService
 import com.commerce.voucher.interfaces.dto.RedemptionResult
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -46,6 +47,7 @@ class RedemptionOrchestrator(
     private val redemptionService: VoucherRedemptionService,
     private val eventPublisher: ApplicationEventPublisher,
     private val meterRegistry: MeterRegistry,
+    private val pointEarnService: PointEarnService,
     private val transactionTemplate: TransactionTemplate,
 ) {
 
@@ -162,6 +164,15 @@ class RedemptionOrchestrator(
                     )
                 )
                 tx.complete()
+
+                // 포인트 적립(동기, 같은 redemption txId 공유). 적립 기준액 = 실제 결제액 T−D(voucherCharged).
+                // 할인분 D는 PROMOTION_FUNDING 보조분이므로 적립 대상이 아니다.
+                // 전액 쿠폰(voucherCharged==0)이면 earn() 내부의 zero-guard가 적립을 건너뜀.
+                pointEarnService.earn(
+                    memberId = voucher.memberId,
+                    baseAmount = voucherCharged,
+                    sourceTransactionId = tx.id,
+                )
 
                 // CRITICAL 감사 추적 — VoucherRedemptionService와 동일한 BEFORE_COMMIT 방식.
                 // 전액 쿠폰 보전(voucherCharged == 0)일 때는 gross orderTotal을 amount로 사용해 감사 레코드를 보장.

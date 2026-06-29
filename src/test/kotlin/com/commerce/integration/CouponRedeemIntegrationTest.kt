@@ -74,9 +74,10 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         cr.discountAmount.compareTo(BigDecimal("3000")) shouldBe 0
         cr.voucherCharged.compareTo(BigDecimal("7000")) shouldBe 0
 
-        // T-account: 같은 txId에 4개 leg(쌍1 REDEMPTION + 쌍2 COUPON_SUBSIDY)
+        // T-account: 같은 txId에 6개 leg(쌍1 REDEMPTION + 쌍2 COUPON_SUBSIDY + 적립 POINT_EARN 2-leg).
+        //            Plan 3 Task 6이 오케스트레이터에 동기 적립을 추가하므로 4 → 6.
         val entries = ledgerService.getEntriesByTransactionId(result.transactionId)
-        entries.size shouldBe 4
+        entries.size shouldBe 6
         val mrDebit = entries.filter { it.account == AccountCode.MERCHANT_RECEIVABLE && it.side == LedgerEntrySide.DEBIT }
             .fold(BigDecimal.ZERO) { acc, e -> acc + e.amount }
         mrDebit.compareTo(BigDecimal("10000")) shouldBe 0

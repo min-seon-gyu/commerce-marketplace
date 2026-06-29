@@ -62,6 +62,7 @@ class PointEarnServiceTest : DescribeSpec({
 
             // findByMemberIdForUpdate returns a real PointAccount so we can assert balance after
             val account = PointAccount(memberId = memberId)
+            every { mockPointAccountRepo.ensureExists(memberId) } just Runs
             every { mockPointAccountRepo.findByMemberIdForUpdate(memberId) } returns account
             every { mockPointTransactionRepo.save(any()) } returns mockk()
             every { mockLedgerService.record(any(), any(), any(), any(), any()) } returns emptyList()

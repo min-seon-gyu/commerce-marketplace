@@ -3,7 +3,6 @@ package com.commerce.point.application
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntryType
-import com.commerce.point.domain.PointAccount
 import com.commerce.point.domain.PointTransaction
 import com.commerce.point.domain.PointTransactionType
 import com.commerce.point.infrastructure.PointAccountJpaRepository
@@ -42,8 +41,10 @@ class PointEarnService(
         val earnAmount = calculateEarn(baseAmount)
         if (earnAmount.signum() <= 0) return BigDecimal.ZERO
 
-        val account = pointAccountRepository.findByMemberIdForUpdate(memberId)
-            ?: pointAccountRepository.save(PointAccount(memberId = memberId))
+        // INSERT IGNORE로 행을 먼저 보장한다: 없으면 생성, 있으면 무시.
+        // 이후 SELECT FOR UPDATE는 항상 기존 행을 잠그므로 갭 락(gap lock) 데드락을 회피한다.
+        pointAccountRepository.ensureExists(memberId)
+        val account = pointAccountRepository.findByMemberIdForUpdate(memberId)!!
         account.earn(earnAmount)
 
         pointTransactionRepository.save(
