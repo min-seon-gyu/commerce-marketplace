@@ -5,6 +5,7 @@ import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntryType
+import com.commerce.point.application.PointEarnService
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
 import com.commerce.voucher.domain.event.VoucherRedeemedEvent
@@ -26,6 +27,7 @@ class VoucherRedemptionService(
     private val transactionService: TransactionService,
     private val eventPublisher: ApplicationEventPublisher,
     private val meterRegistry: MeterRegistry,
+    private val pointEarnService: PointEarnService,
     private val transactionTemplate: TransactionTemplate,
 ) {
 
@@ -63,6 +65,12 @@ class VoucherRedemptionService(
                         entryType = LedgerEntryType.REDEMPTION,
                     )
                     tx.complete()
+
+                    pointEarnService.earn(
+                        memberId = voucher.memberId,
+                        baseAmount = amount,
+                        sourceTransactionId = tx.id,
+                    )
 
                     eventPublisher.publishEvent(
                         VoucherRedeemedEvent(voucherId, merchantId, amount, voucher.balance, tx.id, previousBalance)

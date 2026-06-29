@@ -87,13 +87,13 @@ class E2EFlowTest : IntegrationTestSupport() {
         verification.isBalanced shouldBe true
         verification.imbalancedVouchers shouldBe emptyList()
 
-        // 6. 원장 엔트리 수 확인: 발행(2) + 결제1(2) + 결제2(2) + 환불(2) = 8
+        // 6. 원장 엔트리 수 확인: 발행(2) + 결제1[결제(2)+POINT_EARN(2)] + 결제2[결제(2)+POINT_EARN(2)] + 환불(2) = 12
         val allEntries = ledgerRepository.findAll()
             .filter { entry ->
                 transactionRepository.findById(entry.transactionId)
                     .map { it.voucherId == voucher.id }.orElse(false)
             }
-        allEntries.size shouldBe 8
+        allEntries.size shouldBe 12
     }
 
     @Test
