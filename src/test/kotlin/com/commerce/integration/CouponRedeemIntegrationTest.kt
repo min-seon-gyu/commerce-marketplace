@@ -1,5 +1,7 @@
 package com.commerce.integration
 
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.ledger.domain.AccountCode
@@ -9,10 +11,12 @@ import com.commerce.promotion.domain.CouponStatus
 import com.commerce.promotion.domain.DiscountType
 import com.commerce.promotion.infrastructure.CouponJpaRepository
 import com.commerce.promotion.infrastructure.CouponRedemptionJpaRepository
+import com.commerce.promotion.infrastructure.PromotionBudgetManager
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.application.TransactionService
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -30,6 +34,7 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
     @Autowired lateinit var transactionService: TransactionService
     @Autowired lateinit var ledgerService: LedgerService
     @Autowired lateinit var verificationService: LedgerVerificationService
+    @Autowired lateinit var budgetManager: PromotionBudgetManager
 
     private var regionId: Long = 0
     private var memberId: Long = 0
@@ -103,6 +108,19 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         cr.discountAmount.compareTo(BigDecimal("2000")) shouldBe 0
         cr.voucherCharged.compareTo(BigDecimal.ZERO) shouldBe 0
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("50000")) shouldBe 0
+
+        // 원장 검증: 쌍1(VOUCHER_BALANCE)은 생략, 쌍2(PROMOTION_FUNDING)만 존재 → 2 legs
+        val entries = ledgerService.getEntriesByTransactionId(result.transactionId)
+        entries.size shouldBe 2
+        // VOUCHER_BALANCE leg 는 없어야 함
+        entries.none { it.account == AccountCode.VOUCHER_BALANCE } shouldBe true
+        // PROMOTION_FUNDING CREDIT == orderTotal(T=2,000)
+        val pfCredit = entries.single { it.account == AccountCode.PROMOTION_FUNDING && it.side == LedgerEntrySide.CREDIT }
+        pfCredit.amount.compareTo(BigDecimal("2000")) shouldBe 0
+        // MERCHANT_RECEIVABLE DEBIT == T=2,000
+        val mrDebit = entries.single { it.account == AccountCode.MERCHANT_RECEIVABLE && it.side == LedgerEntrySide.DEBIT }
+        mrDebit.amount.compareTo(BigDecimal("2000")) shouldBe 0
+
         verificationService.verify().isBalanced shouldBe true
     }
 
@@ -115,14 +133,36 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         )
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
-        try {
+        shouldThrow<BusinessException> {
             orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
-        } catch (e: com.commerce.common.exception.BusinessException) {
-            e.errorCode shouldBe com.commerce.common.exception.ErrorCode.MIN_SPEND_NOT_MET
-        }
+        }.errorCode shouldBe ErrorCode.MIN_SPEND_NOT_MET
+
         // 바우처/쿠폰 불변 + 정합성 유지
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("50000")) shouldBe 0
         couponRepository.findById(coupon.id).get().status shouldBe CouponStatus.ISSUED
         verificationService.verify().isBalanced shouldBe true
+    }
+
+    @Test
+    fun `budget is released when downstream voucher balance check fails after reserve`() {
+        // 바우처 잔액 4,000 < T-D = 10,000 - 3,000 = 7,000 → reserve 성공 후 INSUFFICIENT_BALANCE로 롤백
+        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("4000"))
+        val promotion = fixtures.createPromotion(
+            discountType = DiscountType.FIXED, discountValue = BigDecimal("3000"),
+            budgetLimit = BigDecimal("1000000"),
+        )
+        val coupon = fixtures.issueCoupon(promotion.id, memberId)
+
+        // 예산 예약은 DB tx 밖에서 성공하지만 tx 내에서 잔액 부족으로 롤백 → 보상 release 발동해야 함
+        shouldThrow<BusinessException> {
+            orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+        }.errorCode shouldBe ErrorCode.INSUFFICIENT_BALANCE
+
+        // 예산 누수 없음: consumed 가 0으로 복원
+        budgetManager.consumed(promotion.id) shouldBe 0L
+
+        // 바우처·쿠폰 상태 불변
+        voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("4000")) shouldBe 0
+        couponRepository.findById(coupon.id).get().status shouldBe CouponStatus.ISSUED
     }
 }

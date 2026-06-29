@@ -14,11 +14,13 @@ import com.commerce.promotion.infrastructure.PromotionJpaRepository
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
 import com.commerce.voucher.application.VoucherRedemptionService
+import com.commerce.voucher.domain.event.VoucherRedeemedEvent
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
 import com.commerce.voucher.infrastructure.VoucherLockManager
 import com.commerce.voucher.interfaces.dto.RedemptionResult
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.support.TransactionTemplate
 import java.math.BigDecimal
@@ -42,6 +44,7 @@ class RedemptionOrchestrator(
     private val transactionService: TransactionService,
     private val budgetManager: PromotionBudgetManager,
     private val redemptionService: VoucherRedemptionService,
+    private val eventPublisher: ApplicationEventPublisher,
     private val meterRegistry: MeterRegistry,
     private val transactionTemplate: TransactionTemplate,
 ) {
@@ -111,6 +114,8 @@ class RedemptionOrchestrator(
                 if (voucher.isExpired()) throw BusinessException(ErrorCode.VOUCHER_EXPIRED)
                 if (voucher.balance < voucherCharged) throw BusinessException(ErrorCode.INSUFFICIENT_BALANCE)
 
+                val previousBalance = voucher.balance // capture before deduction for audit event
+
                 // 바우처 차감은 실제 차감액이 있을 때만 (T==D 전액 쿠폰 보전이면 0원 차감/분개 금지)
                 if (voucherCharged > BigDecimal.ZERO) voucher.redeem(voucherCharged)
 
@@ -157,6 +162,20 @@ class RedemptionOrchestrator(
                     )
                 )
                 tx.complete()
+
+                // CRITICAL 감사 추적 — VoucherRedemptionService와 동일한 BEFORE_COMMIT 방식.
+                // 전액 쿠폰 보전(voucherCharged == 0)일 때는 gross orderTotal을 amount로 사용해 감사 레코드를 보장.
+                val auditAmount = if (voucherCharged > BigDecimal.ZERO) voucherCharged else orderTotal
+                eventPublisher.publishEvent(
+                    VoucherRedeemedEvent(
+                        aggregateId = voucherId,
+                        merchantId = merchantId,
+                        amount = auditAmount,
+                        remainingBalance = voucher.balance,
+                        transactionId = tx.id,
+                        previousBalance = previousBalance,
+                    )
+                )
 
                 RedemptionResult(transactionId = tx.id, remainingBalance = voucher.balance)
             }!!
