@@ -33,14 +33,24 @@ class TestFixtures(
     private val promotionService: PromotionService,
     private val couponIssueService: CouponIssueService,
 ) {
-    private var counter = 0
     private val base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+    companion object {
+        /** JVM-wide counter — shared across all Spring contexts so separate ApplicationContexts
+         *  (e.g. those created by @MockBean) do not regenerate the same region codes. */
+        private val globalCounter = java.util.concurrent.atomic.AtomicInteger(0)
+    }
 
     /** 충돌 없는 유니크 2글자 region 코드 생성 (region_code 컬럼이 length=2, unique 제약) */
     private fun nextRegionCode(): String {
-        val n = (counter++) % (36 * 36)
+        val n = globalCounter.getAndIncrement() % (36 * 36)
         return "${base36[n / 36]}${base36[n % 36]}"
     }
+
+    /** JVM-wide unique int used for emails, business numbers, and other unique fields.
+     *  Using the same globalCounter avoids collisions across separate Spring contexts
+     *  (e.g. contexts created by @MockBean). */
+    private fun nextId(): Int = globalCounter.getAndIncrement()
 
     fun createRegion(
         name: String = "성남시",
@@ -60,21 +70,22 @@ class TestFixtures(
     }
 
     fun createMember(email: String? = null): Member {
-        counter++
+        val id = nextId()
         return memberService.register(
             RegisterMemberRequest(
-                email = email ?: "user$counter@test.com",
-                name = "테스트유저$counter",
+                email = email ?: "user$id@test.com",
+                name = "테스트유저$id",
                 password = "password123",
             )
         )
     }
 
     fun createMerchant(region: Region, owner: Member): Merchant {
+        val id = nextId()
         val merchant = merchantService.register(
             RegisterMerchantRequest(
-                name = "테스트가게${counter++}",
-                businessNumber = "123-45-${String.format("%05d", counter)}",
+                name = "테스트가게$id",
+                businessNumber = "123-45-${String.format("%05d", id)}",
                 category = "RESTAURANT",
                 regionId = region.id,
                 ownerId = owner.id,
@@ -99,7 +110,7 @@ class TestFixtures(
         budgetLimit: BigDecimal = BigDecimal("1000000"),
     ): Promotion = promotionService.create(
         CreatePromotionRequest(
-            name = "프로모션${counter++}",
+            name = "프로모션${nextId()}",
             discountType = discountType,
             discountValue = discountValue,
             minSpend = minSpend,

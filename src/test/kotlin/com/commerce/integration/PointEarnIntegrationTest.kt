@@ -69,6 +69,7 @@ class PointEarnIntegrationTest : IntegrationTestSupport() {
         debit.account shouldBe AccountCode.POINT_BALANCE
         credit.account shouldBe AccountCode.POINT_FUNDING
         debit.amount.compareTo(BigDecimal("200")) shouldBe 0
+        credit.amount.compareTo(BigDecimal("200")) shouldBe 0
 
         // 4) 전역 원장 정합성
         val verification = verificationService.verify()
