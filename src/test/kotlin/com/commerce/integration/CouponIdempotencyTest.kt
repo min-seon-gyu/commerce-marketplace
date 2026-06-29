@@ -4,10 +4,12 @@ import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.promotion.domain.CouponStatus
 import com.commerce.promotion.infrastructure.CouponJpaRepository
 import com.commerce.promotion.infrastructure.CouponRedemptionJpaRepository
+import com.commerce.promotion.infrastructure.PromotionBudgetManager
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.domain.TransactionStatus
 import com.commerce.transaction.infrastructure.TransactionJpaRepository
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
+import com.fasterxml.jackson.databind.ObjectMapper
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -28,6 +30,7 @@ import java.util.UUID
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -65,6 +68,8 @@ class CouponIdempotencyTest {
     @Autowired lateinit var couponRedemptionRepository: CouponRedemptionJpaRepository
     @Autowired lateinit var transactionRepository: TransactionJpaRepository
     @Autowired lateinit var verificationService: LedgerVerificationService
+    @Autowired lateinit var promotionBudgetManager: PromotionBudgetManager
+    @Autowired lateinit var objectMapper: ObjectMapper
 
     private var regionId: Long = 0
     private var memberId: Long = 0
@@ -104,11 +109,22 @@ class CouponIdempotencyTest {
         val latch = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(threadCount)
         val success2xx = AtomicInteger(0)
+        val conflict409 = AtomicInteger(0)
+        val successTransactionId = AtomicLong(-1L)
         val futures = (1..threadCount).map {
             executor.submit {
                 latch.await()
                 val response = restTemplate.postForEntity(url, request, String::class.java)
-                if (response.statusCode.is2xxSuccessful) success2xx.incrementAndGet()
+                when {
+                    response.statusCode.is2xxSuccessful -> {
+                        success2xx.incrementAndGet()
+                        response.body?.let { rb ->
+                            val txId = objectMapper.readTree(rb).get("transactionId").asLong()
+                            successTransactionId.set(txId)
+                        }
+                    }
+                    response.statusCode.value() == 409 -> conflict409.incrementAndGet()
+                }
             }
         }
         latch.countDown()
@@ -127,5 +143,27 @@ class CouponIdempotencyTest {
 
         // 원장 정합성: 차변 = 대변
         verificationService.verify().isBalanced shouldBe true
+
+        // HTTP 레벨 멱등성 — 인터셉터 설계: 처리 중 동시 중복 요청은 409 CONFLICT,
+        // 완료 후 순차 재시도에는 캐시된 2xx를 반환한다.
+        // 정확히 1건이 비즈니스 로직 실행, 9건은 처리 중 중복으로 거절됨
+        success2xx.get() shouldBe 1
+        conflict409.get() shouldBe 9
+        (success2xx.get() + conflict409.get()) shouldBe threadCount
+
+        // 프로모션 예산이 정확히 1회(3,000원)만 소비됨
+        promotionBudgetManager.consumed(promotion.id) shouldBe 3000L
+        couponRedemptionRepository.sumActiveDiscountByPromotion(promotion.id)
+            .compareTo(BigDecimal("3000")) shouldBe 0
+
+        // 캐시 경로 검증: 동시 블래스트 완료 후 동일 키로 순차 재시도 → 캐시된 2xx 반환
+        val retryResponse = restTemplate.postForEntity(url, request, String::class.java)
+        retryResponse.statusCode.is2xxSuccessful shouldBe true
+        val retryTransactionId = objectMapper.readTree(retryResponse.body).get("transactionId").asLong()
+        retryTransactionId shouldBe successTransactionId.get()
+
+        // 재시도 후에도 DB 상태 불변 — 추가 처리 없음
+        voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("43000")) shouldBe 0
+        couponRedemptionRepository.countByMemberIdAndPromotionIdAndCancelledFalse(memberId, promotion.id) shouldBe 1L
     }
 }
