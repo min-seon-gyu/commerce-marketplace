@@ -50,4 +50,10 @@ enum class ErrorCode(
     COUPON_EXPIRED(HttpStatus.BAD_REQUEST, "만료된 쿠폰입니다"),
     COUPON_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용된 쿠폰입니다"),
     COUPON_USAGE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "회원당 쿠폰 사용 한도를 초과했습니다"),
+
+    // Auth — 본인 자원 외 접근(FORBIDDEN, 403) 전용. 미인증(UNAUTHORIZED, 401)은 SecurityUtils.currentMemberId()가 던진다.
+    ACCESS_DENIED(HttpStatus.FORBIDDEN, "본인 자원에만 접근할 수 있습니다"),
+
+    // Point
+    POINT_ACCOUNT_NOT_FOUND(HttpStatus.NOT_FOUND, "포인트 계정을 찾을 수 없습니다"),
 }
