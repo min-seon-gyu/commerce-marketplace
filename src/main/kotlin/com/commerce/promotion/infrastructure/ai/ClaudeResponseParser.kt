@@ -47,7 +47,11 @@ class ClaudeResponseParser(
         val draft = toDraft(draftNode)
 
         val usage = root.path("usage")
-        val totalTokens = usage.path("input_tokens").asLong(0) + usage.path("output_tokens").asLong(0)
+        if (usage.isMissingNode || usage.isNull) fail("usage 블록이 없습니다", null)
+        val inputTokensNode = usage.path("input_tokens")
+        val outputTokensNode = usage.path("output_tokens")
+        if (inputTokensNode.isMissingNode || outputTokensNode.isMissingNode) fail("usage.input_tokens 또는 usage.output_tokens 누락", null)
+        val totalTokens = inputTokensNode.asLong(0) + outputTokensNode.asLong(0)
 
         return ParsedDraft(draft = draft, totalTokens = totalTokens)
     }
@@ -63,7 +67,7 @@ class ClaudeResponseParser(
                 minSpend = requireDecimal(n, "minSpend"),
                 validFrom = LocalDate.parse(requireText(n, "validFrom")),
                 validUntil = LocalDate.parse(requireText(n, "validUntil")),
-                stackable = requireField(n, "stackable").asBoolean(),
+                stackable = requireBoolean(n, "stackable"),
             )
         } catch (e: BusinessException) {
             throw e
@@ -83,6 +87,12 @@ class ClaudeResponseParser(
         val s = v.asText()
         if (s.isBlank()) fail("필수 문자열 필드가 비어 있습니다: $field", null)
         return s
+    }
+
+    private fun requireBoolean(n: JsonNode, field: String): Boolean {
+        val v = requireField(n, field)
+        if (!v.isBoolean) fail("불리언 필드가 아닙니다: $field", null)
+        return v.booleanValue()
     }
 
     private fun requireDecimal(n: JsonNode, field: String): BigDecimal {
