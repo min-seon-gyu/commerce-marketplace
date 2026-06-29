@@ -20,6 +20,10 @@ class VoucherLockManager(
     fun <T> withMemberPurchaseLock(memberId: Long, action: () -> T): T =
         withLock("member:purchase:$memberId", action)
 
+    /** 정준 락 순서 coupon → voucher 의 외측 락. 키 접두사 `coupon`은 메트릭 태그로 자동 분리된다. */
+    fun <T> withCouponLock(couponId: Long, action: () -> T): T =
+        withLock("coupon:$couponId", action)
+
     private fun <T> withLock(key: String, action: () -> T): T {
         val lock = redissonClient.getLock(key)
         val timer = Timer.start(meterRegistry)

@@ -6,6 +6,12 @@ import com.commerce.member.interfaces.dto.RegisterMemberRequest
 import com.commerce.merchant.application.MerchantService
 import com.commerce.merchant.application.RegisterMerchantRequest
 import com.commerce.merchant.domain.Merchant
+import com.commerce.promotion.application.CouponIssueService
+import com.commerce.promotion.application.PromotionService
+import com.commerce.promotion.domain.Coupon
+import com.commerce.promotion.domain.DiscountType
+import com.commerce.promotion.domain.Promotion
+import com.commerce.promotion.interfaces.dto.CreatePromotionRequest
 import com.commerce.region.application.RegionService
 import com.commerce.region.domain.Region
 import com.commerce.region.interfaces.dto.CreateRegionRequest
@@ -24,6 +30,8 @@ class TestFixtures(
     private val merchantService: MerchantService,
     private val voucherIssueService: VoucherIssueService,
     private val voucherJpaRepository: VoucherJpaRepository,
+    private val promotionService: PromotionService,
+    private val couponIssueService: CouponIssueService,
 ) {
     private var counter = 0
     private val base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -82,6 +90,28 @@ class TestFixtures(
     ): Voucher {
         return voucherIssueService.issue(memberId, regionId, faceValue)
     }
+
+    fun createPromotion(
+        discountType: DiscountType = DiscountType.FIXED,
+        discountValue: BigDecimal = BigDecimal("3000"),
+        minSpend: BigDecimal = BigDecimal.ZERO,
+        perMemberLimit: Int = 1,
+        budgetLimit: BigDecimal = BigDecimal("1000000"),
+    ): Promotion = promotionService.create(
+        CreatePromotionRequest(
+            name = "프로모션${counter++}",
+            discountType = discountType,
+            discountValue = discountValue,
+            minSpend = minSpend,
+            perMemberLimit = perMemberLimit,
+            budgetLimit = budgetLimit,
+            startsAt = LocalDateTime.now().minusDays(1),
+            endsAt = LocalDateTime.now().plusDays(30),
+        )
+    )
+
+    fun issueCoupon(promotionId: Long, memberId: Long): Coupon =
+        couponIssueService.issue(promotionId, memberId)
 
     @Transactional
     fun forceExpireVoucher(voucherId: Long) {

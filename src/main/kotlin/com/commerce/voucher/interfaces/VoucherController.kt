@@ -4,7 +4,6 @@ import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.common.idempotency.Idempotent
 import com.commerce.voucher.application.VoucherIssueService
-import com.commerce.voucher.application.VoucherRedemptionService
 import com.commerce.voucher.application.VoucherRefundService
 import com.commerce.voucher.application.VoucherWithdrawalService
 import com.commerce.voucher.domain.VoucherStatus
@@ -22,7 +21,7 @@ import org.springframework.web.bind.annotation.*
 @RequestMapping("/api/v1/vouchers")
 class VoucherController(
     private val issueService: VoucherIssueService,
-    private val redemptionService: VoucherRedemptionService,
+    private val redemptionOrchestrator: com.commerce.promotion.application.RedemptionOrchestrator,
     private val refundService: VoucherRefundService,
     private val withdrawalService: VoucherWithdrawalService,
     private val voucherQueryRepository: VoucherQueryRepository,
@@ -55,7 +54,7 @@ class VoucherController(
     @PostMapping("/{id}/redeem")
     @Idempotent
     fun redeem(@PathVariable id: Long, @Valid @RequestBody request: RedeemRequest): RedemptionResult =
-        redemptionService.redeem(id, request.merchantId, request.amount)
+        redemptionOrchestrator.redeem(id, request.merchantId, request.amount, request.couponId)
 
     @PostMapping("/{id}/refund")
     @Idempotent
