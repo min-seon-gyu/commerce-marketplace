@@ -12,7 +12,7 @@ import java.time.LocalDateTime
 @Table(
     name = "promotions",
     indexes = [
-        Index(name = "idx_promotion_status", columnList = "status, startsAt, endsAt"),
+        Index(name = "idx_promotion_status", columnList = "status,starts_at,ends_at"),
     ]
 )
 class Promotion(

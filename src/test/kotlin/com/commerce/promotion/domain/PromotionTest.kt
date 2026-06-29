@@ -81,4 +81,22 @@ class PromotionTest {
         p.activate()
         p.status shouldBe PromotionStatus.ACTIVE
     }
+
+    @Test
+    fun `activate on non-DRAFT status throws INVALID_STATE_TRANSITION`() {
+        val p = promotion(status = PromotionStatus.ACTIVE)
+        shouldThrow<BusinessException> { p.activate() }
+            .errorCode shouldBe ErrorCode.INVALID_STATE_TRANSITION
+    }
+
+    @Test
+    fun `isActive returns true for ACTIVE promotion within time window`() {
+        val now = LocalDateTime.now()
+        val p = promotion(
+            status = PromotionStatus.ACTIVE,
+            startsAt = now.minusHours(1),
+            endsAt = now.plusHours(1),
+        )
+        p.isActive(now) shouldBe true
+    }
 }
