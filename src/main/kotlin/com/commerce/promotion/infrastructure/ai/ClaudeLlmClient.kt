@@ -9,6 +9,8 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import org.slf4j.LoggerFactory
 import org.springframework.http.MediaType
+import org.springframework.web.client.HttpClientErrorException
+import org.springframework.web.client.HttpServerErrorException
 import org.springframework.web.client.RestClient
 import org.springframework.web.client.RestClientException
 
@@ -30,8 +32,10 @@ class ClaudeLlmClient(
     private val log = LoggerFactory.getLogger(javaClass)
 
     init {
-        require(properties.apiKey.isNotBlank()) {
-            "ai.promotion.api-key 가 설정되지 않았습니다. enabled=true 시 API 키는 필수입니다."
+        if (properties.enabled) {
+            require(properties.apiKey.isNotBlank()) {
+                "ANTHROPIC_API_KEY must be set when ai.promotion.enabled=true"
+            }
         }
     }
 
@@ -69,7 +73,22 @@ class ClaudeLlmClient(
                 meterRegistry.counter("ai.promotion.draft.failure", "reason", "schema").increment()
                 timer.stop(meterRegistry.timer("ai.promotion.draft.latency"))
                 throw e
+            } catch (e: HttpClientErrorException) {
+                // 4xx — 비일시적 오류: 재시도 불가, 즉시 실패
+                circuitBreaker.recordFailure()
+                meterRegistry.counter("ai.promotion.draft.failure", "reason", "client_error").increment()
+                timer.stop(meterRegistry.timer("ai.promotion.draft.latency"))
+                log.warn("AI 초안 호출 4xx 오류(비재시도): {}", e.message)
+                throw BusinessException(ErrorCode.AI_DRAFT_GENERATION_FAILED)
+            } catch (e: HttpServerErrorException) {
+                // 5xx — 일시적 오류: 재시도
+                lastError = e
+                log.warn("AI 초안 호출 5xx 실패(시도 {}/{}): {}", attempt + 1, properties.maxRetries + 1, e.message)
+                if (attempt < properties.maxRetries) {
+                    backoff(attempt)
+                }
             } catch (e: RestClientException) {
+                // 네트워크/IO/타임아웃 — 일시적 오류: 재시도
                 lastError = e
                 log.warn("AI 초안 호출 실패(시도 {}/{}): {}", attempt + 1, properties.maxRetries + 1, e.message)
                 if (attempt < properties.maxRetries) {

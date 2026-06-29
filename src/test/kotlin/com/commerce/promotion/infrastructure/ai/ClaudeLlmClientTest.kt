@@ -20,6 +20,7 @@ import org.springframework.test.web.client.match.MockRestRequestMatchers.header
 import org.springframework.test.web.client.match.MockRestRequestMatchers.jsonPath
 import org.springframework.test.web.client.match.MockRestRequestMatchers.method
 import org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo
+import org.springframework.test.web.client.response.MockRestResponseCreators.withBadRequest
 import org.springframework.test.web.client.response.MockRestResponseCreators.withServerError
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
 import org.springframework.web.client.RestClient
@@ -103,6 +104,40 @@ class ClaudeLlmClientTest {
         }
         ex.errorCode shouldBe ErrorCode.AI_DRAFT_GENERATION_FAILED
         server.verify()
+    }
+
+    @Test
+    fun `4xx 는 재시도 없이 즉시 실패한다`() {
+        val builder = RestClient.builder().baseUrl(props.baseUrl)
+        val server = MockRestServiceServer.bindTo(builder).build()
+        server.expect(ExpectedCount.once(), requestTo("https://api.anthropic.com/v1/messages"))
+            .andRespond(withBadRequest())
+
+        val ex = shouldThrow<BusinessException> {
+            newClient(builder).generateDraft(LlmDraftCommand("성남시 10% 할인 7월", null))
+        }
+        ex.errorCode shouldBe ErrorCode.AI_DRAFT_GENERATION_FAILED
+        server.verify() // 단 1회만 호출됐음을 확인 — 재시도 없음
+    }
+
+    @Test
+    fun `파싱 실패는 재시도 없이 즉시 실패한다`() {
+        val malformedBody = """
+            {"id":"m","type":"message","role":"assistant","model":"claude-haiku-4-5",
+             "stop_reason":"end_turn",
+             "content":[{"type":"text","text":"{\"oops\":\"required fields missing\"}"}],
+             "usage":{"input_tokens":800,"output_tokens":120}}
+        """.trimIndent()
+        val builder = RestClient.builder().baseUrl(props.baseUrl)
+        val server = MockRestServiceServer.bindTo(builder).build()
+        server.expect(ExpectedCount.once(), requestTo("https://api.anthropic.com/v1/messages"))
+            .andRespond(withSuccess(malformedBody, MediaType.APPLICATION_JSON))
+
+        val ex = shouldThrow<BusinessException> {
+            newClient(builder).generateDraft(LlmDraftCommand("성남시 10% 할인 7월", null))
+        }
+        ex.errorCode shouldBe ErrorCode.AI_DRAFT_GENERATION_FAILED
+        server.verify() // 단 1회만 호출됐음을 확인 — 파싱 실패는 재시도 안 함
     }
 
     @Test
