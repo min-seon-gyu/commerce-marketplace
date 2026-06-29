@@ -28,16 +28,20 @@ class JwtAuthenticationFilter(
         val header = request.getHeader("Authorization")
         if (header != null && header.startsWith(BEARER_PREFIX)) {
             val token = header.substring(BEARER_PREFIX.length)
-            if (jwtTokenProvider.validateToken(token)) {
-                val memberId: Long = jwtTokenProvider.getMemberIdFromToken(token)
-                val role: String = jwtTokenProvider.getRoleFromToken(token)
-                val authentication = UsernamePasswordAuthenticationToken(
-                    memberId,
-                    null,
-                    listOf(SimpleGrantedAuthority("ROLE_$role")),
-                )
-                authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
-                SecurityContextHolder.getContext().authentication = authentication
+            try {
+                if (jwtTokenProvider.validateToken(token)) {
+                    val memberId: Long = jwtTokenProvider.getMemberIdFromToken(token)
+                    val role: String = jwtTokenProvider.getRoleFromToken(token)
+                    val authentication = UsernamePasswordAuthenticationToken(
+                        memberId,
+                        null,
+                        listOf(SimpleGrantedAuthority("ROLE_$role")),
+                    )
+                    authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
+                    SecurityContextHolder.getContext().authentication = authentication
+                }
+            } catch (e: Exception) {
+                SecurityContextHolder.clearContext()
             }
         }
         filterChain.doFilter(request, response)
