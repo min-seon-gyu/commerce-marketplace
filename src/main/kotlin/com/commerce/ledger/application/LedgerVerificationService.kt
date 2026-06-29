@@ -3,6 +3,7 @@ package com.commerce.ledger.application
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntrySide
 import com.commerce.ledger.infrastructure.LedgerJpaRepository
+import com.commerce.point.infrastructure.PointAccountJpaRepository
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
 import io.micrometer.core.instrument.MeterRegistry
 import org.slf4j.LoggerFactory
@@ -17,6 +18,7 @@ data class VerificationResult(
     val globalDebitTotal: BigDecimal,
     val globalCreditTotal: BigDecimal,
     val imbalancedVouchers: List<ImbalancedVoucher>,
+    val pointBalanceMatches: Boolean,
 )
 
 data class ImbalancedVoucher(
@@ -30,6 +32,7 @@ data class ImbalancedVoucher(
 class LedgerVerificationService(
     private val ledgerRepository: LedgerJpaRepository,
     private val voucherRepository: VoucherJpaRepository,
+    private val pointAccountRepository: PointAccountJpaRepository,
     private val meterRegistry: MeterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -39,9 +42,13 @@ class LedgerVerificationService(
     fun scheduledVerification() {
         val result = verify()
         meterRegistry.gauge("ledger.verification.imbalance", result.imbalancedVouchers.size.toDouble())
+        meterRegistry.gauge("ledger.verification.point.matches", if (result.pointBalanceMatches) 1.0 else 0.0)
         if (!result.isBalanced) {
-            log.error("LEDGER IMBALANCE DETECTED: {} vouchers, global debit={}, credit={}",
-                result.imbalancedVouchers.size, result.globalDebitTotal, result.globalCreditTotal)
+            log.error(
+                "LEDGER IMBALANCE DETECTED: {} vouchers, pointBalanceMatches={}, global debit={}, credit={}",
+                result.imbalancedVouchers.size, result.pointBalanceMatches,
+                result.globalDebitTotal, result.globalCreditTotal,
+            )
         } else {
             log.info("Ledger verification passed. Global balance: {}", result.globalDebitTotal)
         }
@@ -54,11 +61,14 @@ class LedgerVerificationService(
 
         val imbalanced = checkVoucherBalances()
 
+        val pointBalanceMatches = checkPointBalance()
+
         return VerificationResult(
-            isBalanced = globalBalanced && imbalanced.isEmpty(),
+            isBalanced = globalBalanced && imbalanced.isEmpty() && pointBalanceMatches,
             globalDebitTotal = globalDebit,
             globalCreditTotal = globalCredit,
             imbalancedVouchers = imbalanced,
+            pointBalanceMatches = pointBalanceMatches,
         )
     }
 
@@ -79,5 +89,14 @@ class LedgerVerificationService(
                 )
             } else null
         }
+    }
+
+    // POINT_BALANCE 차변정상: 원장 net(차변-대변) == 모든 PointAccount.balance 합.
+    private fun checkPointBalance(): Boolean {
+        val ledgerPointBalance =
+            ledgerRepository.sumByAccountAndSide(AccountCode.POINT_BALANCE, LedgerEntrySide.DEBIT) -
+            ledgerRepository.sumByAccountAndSide(AccountCode.POINT_BALANCE, LedgerEntrySide.CREDIT)
+        val cachedPointTotal = pointAccountRepository.sumAllBalances()
+        return cachedPointTotal.compareTo(ledgerPointBalance) == 0
     }
 }
