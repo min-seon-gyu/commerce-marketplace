@@ -40,4 +40,14 @@ enum class ErrorCode(
     // Ledger
     LEDGER_IMBALANCE_DETECTED(HttpStatus.INTERNAL_SERVER_ERROR, "원장 정합성 오류가 감지되었습니다"),
     MANUAL_ADJUSTMENT_REQUIRES_ADMIN(HttpStatus.FORBIDDEN, "수동 원장 조정은 관리자 승인이 필요합니다"),
+
+    // Promotion / Coupon (스펙 §4.1, §7)
+    PROMOTION_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "진행 중인 프로모션이 아닙니다"),
+    PROMOTION_BUDGET_EXCEEDED(HttpStatus.BAD_REQUEST, "프로모션 예산이 소진되었습니다"),
+    INVALID_DISCOUNT(HttpStatus.BAD_REQUEST, "유효하지 않은 할인 금액입니다"),
+    MIN_SPEND_NOT_MET(HttpStatus.BAD_REQUEST, "최소 결제금액 조건을 충족하지 않습니다"),
+    COUPON_NOT_FOUND(HttpStatus.NOT_FOUND, "쿠폰을 찾을 수 없습니다"),
+    COUPON_EXPIRED(HttpStatus.BAD_REQUEST, "만료된 쿠폰입니다"),
+    COUPON_ALREADY_USED(HttpStatus.BAD_REQUEST, "이미 사용된 쿠폰입니다"),
+    COUPON_USAGE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "회원당 쿠폰 사용 한도를 초과했습니다"),
 }
