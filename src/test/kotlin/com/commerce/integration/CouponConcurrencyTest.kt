@@ -37,7 +37,7 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
 
     @BeforeEach
     fun setup() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
+        val region = fixtures.createRegion(code = UUID.randomUUID().toString().replace("-", "").take(8).uppercase())
         val merchant = fixtures.createMerchant(region, fixtures.createMember())
         regionId = region.id
         merchantId = merchant.id
@@ -75,6 +75,8 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
         futures.forEach { it.get() }
         executor.shutdown()
 
+        // 모든 결과가 합산되어 스레드 수와 일치
+        (success.get() + alreadyUsed.get()) shouldBe 10
         // 정확히 1회 사용
         success.get() shouldBe 1
         alreadyUsed.get() shouldBe 9
@@ -123,6 +125,8 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
         futures.forEach { it.get() }
         executor.shutdown()
 
+        // 모든 결과가 합산되어 스레드 수와 일치
+        (success.get() + budgetExceeded.get()) shouldBe 10
         // 예산 9,000 / 3,000 = 정확히 3건 성공, 나머지 예산 초과
         success.get() shouldBe 3
         budgetExceeded.get() shouldBe 7
@@ -131,5 +135,10 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
         couponRedemptionRepository.sumActiveDiscountByPromotion(promotion.id)
             .compareTo(BigDecimal("9000")) shouldBe 0
         verificationService.verify().isBalanced shouldBe true
+        // 성공한 3건의 바우처는 잔액이 음수가 되지 않아야 함
+        ctxs.forEach { ctx ->
+            val v = voucherRepository.findById(ctx.voucherId).get()
+            (v.balance >= BigDecimal.ZERO) shouldBe true
+        }
     }
 }
