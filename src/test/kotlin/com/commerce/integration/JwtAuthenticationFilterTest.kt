@@ -27,7 +27,7 @@ class JwtAuthenticationFilterTest : IntegrationTestSupport() {
             header("Authorization", "Bearer $token")
         }.andExpect {
             status { isOk() }
-            jsonPath("$.memberId") { value(777) }
+            jsonPath("$.data.memberId") { value(777) }
         }
     }
 

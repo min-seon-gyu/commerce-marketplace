@@ -28,7 +28,7 @@ class Settlement(
     @Column(nullable = false)
     val periodEnd: LocalDate,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     var totalAmount: BigDecimal,
 
     @Enumerated(EnumType.STRING)

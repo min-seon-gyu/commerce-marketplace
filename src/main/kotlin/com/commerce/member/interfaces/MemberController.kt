@@ -1,5 +1,6 @@
 package com.commerce.member.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.member.application.MemberService
 import com.commerce.member.interfaces.dto.*
 import jakarta.validation.Valid
@@ -14,26 +15,26 @@ class MemberController(
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    fun register(@Valid @RequestBody request: RegisterMemberRequest): MemberResponse =
-        MemberResponse.from(memberService.register(request))
+    fun register(@Valid @RequestBody request: RegisterMemberRequest): ApiResponse<MemberResponse> =
+        ApiResponse.ok(MemberResponse.from(memberService.register(request)))
 
     @PostMapping("/login")
-    fun login(@Valid @RequestBody request: LoginRequest): TokenResponse =
-        memberService.login(request)
+    fun login(@Valid @RequestBody request: LoginRequest): ApiResponse<TokenResponse> =
+        ApiResponse.ok(memberService.login(request))
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): MemberResponse =
-        MemberResponse.from(memberService.getById(id))
+    fun getById(@PathVariable id: Long): ApiResponse<MemberResponse> =
+        ApiResponse.ok(MemberResponse.from(memberService.getById(id)))
 
     @PostMapping("/{id}/suspend")
-    fun suspend(@PathVariable id: Long): MemberResponse =
-        MemberResponse.from(memberService.suspend(id))
+    fun suspend(@PathVariable id: Long): ApiResponse<MemberResponse> =
+        ApiResponse.ok(MemberResponse.from(memberService.suspend(id)))
 
     @PostMapping("/{id}/unsuspend")
-    fun unsuspend(@PathVariable id: Long): MemberResponse =
-        MemberResponse.from(memberService.unsuspend(id))
+    fun unsuspend(@PathVariable id: Long): ApiResponse<MemberResponse> =
+        ApiResponse.ok(MemberResponse.from(memberService.unsuspend(id)))
 
     @PostMapping("/{id}/withdraw")
-    fun withdraw(@PathVariable id: Long): MemberResponse =
-        MemberResponse.from(memberService.withdraw(id))
+    fun withdraw(@PathVariable id: Long): ApiResponse<MemberResponse> =
+        ApiResponse.ok(MemberResponse.from(memberService.withdraw(id)))
 }

@@ -11,10 +11,10 @@ data class RegionPolicy(
     @Column(nullable = false, precision = 5, scale = 2)
     val discountRate: BigDecimal,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     val purchaseLimitPerPerson: BigDecimal,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     val monthlyIssuanceLimit: BigDecimal,
 
     @Column(nullable = false, precision = 3, scale = 2)

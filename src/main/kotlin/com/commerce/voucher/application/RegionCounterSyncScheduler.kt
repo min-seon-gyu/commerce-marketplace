@@ -38,7 +38,14 @@ class RegionCounterSyncScheduler(
                 )
 
                 val counter = redissonClient.getAtomicLong(key)
-                counter.set(dbTotal.toLong())
+                val currentValue = counter.get()
+
+                // DB 값보다 작을 때만 보정 (Redis 재시작 등으로 유실된 경우)
+                // DB 값보다 큰 경우는 동기화 이후 신규 발행이 발생한 것이므로 덮어쓰지 않음
+                if (currentValue < dbTotal.toLong()) {
+                    counter.set(dbTotal.toLong())
+                    log.info("Region {} monthly counter corrected: {} -> {}", region.regionCode, currentValue, dbTotal)
+                }
 
                 // TTL: 월 말 + 1일
                 if (counter.remainTimeToLive() == -1L) {
@@ -46,7 +53,7 @@ class RegionCounterSyncScheduler(
                     counter.expire(Duration.between(LocalDateTime.now(), endOfMonth.atStartOfDay()))
                 }
 
-                log.debug("Region {} monthly counter synced: {}", region.regionCode, dbTotal)
+                log.debug("Region {} monthly counter synced: current={}, db={}", region.regionCode, counter.get(), dbTotal)
             } catch (e: Exception) {
                 log.error("Failed to sync region {} counter: {}", region.regionCode, e.message)
             }

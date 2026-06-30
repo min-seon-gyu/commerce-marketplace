@@ -1,5 +1,6 @@
 package com.commerce.ledger.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.ledger.application.VerificationResult
@@ -35,6 +36,11 @@ data class AccountBalanceResponse(
     val netBalance: BigDecimal,
 )
 
+data class GlobalBalanceResponse(
+    val totalDebit: BigDecimal,
+    val totalCredit: BigDecimal,
+)
+
 @RestController
 @RequestMapping("/api/v1/admin/ledger")
 class LedgerQueryController(
@@ -43,24 +49,25 @@ class LedgerQueryController(
 ) {
 
     @GetMapping("/entries/transaction/{transactionId}")
-    fun getByTransaction(@PathVariable transactionId: Long): List<LedgerEntryResponse> =
-        ledgerService.getEntriesByTransactionId(transactionId).map { LedgerEntryResponse.from(it) }
+    fun getByTransaction(@PathVariable transactionId: Long): ApiResponse<List<LedgerEntryResponse>> =
+        ApiResponse.ok(ledgerService.getEntriesByTransactionId(transactionId).map { LedgerEntryResponse.from(it) })
 
     @GetMapping("/balance/{account}")
-    fun getAccountBalance(@PathVariable account: String): AccountBalanceResponse {
+    fun getAccountBalance(@PathVariable account: String): ApiResponse<AccountBalanceResponse> {
         val accountCode = AccountCode.valueOf(account)
-        return AccountBalanceResponse(
+        return ApiResponse.ok(AccountBalanceResponse(
             account = accountCode.name,
             netBalance = ledgerService.netBalanceByAccount(accountCode),
-        )
+        ))
     }
 
     @GetMapping("/balance/global")
-    fun getGlobalBalance(): Map<String, BigDecimal> = mapOf(
-        "totalDebit" to ledgerService.globalDebitTotal(),
-        "totalCredit" to ledgerService.globalCreditTotal(),
-    )
+    fun getGlobalBalance(): ApiResponse<GlobalBalanceResponse> =
+        ApiResponse.ok(GlobalBalanceResponse(
+            totalDebit = ledgerService.globalDebitTotal(),
+            totalCredit = ledgerService.globalCreditTotal(),
+        ))
 
     @PostMapping("/verify")
-    fun verify(): VerificationResult = verificationService.verify()
+    fun verify(): ApiResponse<VerificationResult> = ApiResponse.ok(verificationService.verify())
 }

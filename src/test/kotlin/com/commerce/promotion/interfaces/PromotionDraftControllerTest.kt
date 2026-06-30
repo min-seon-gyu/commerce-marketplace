@@ -48,7 +48,7 @@ class PromotionDraftControllerTest {
         authenticateAs(42L)
         every { service.draft(any(), 42L) } returns PromotionDraftResult(draft, ValidationReport(true, emptyList()))
 
-        val response = controller.createDraft(CreatePromotionDraftRequest("성남시 10% 할인", null))
+        val response = controller.createDraft(CreatePromotionDraftRequest("성남시 10% 할인", null)).data!!
 
         response.draft.target shouldBe "SN"
         response.validation.valid.shouldBeTrue()
@@ -72,7 +72,7 @@ class PromotionDraftControllerTest {
         )
         every { service.draft(any(), 42L) } returns rejectedResult
 
-        val response = controller.createDraft(CreatePromotionDraftRequest("미허용 지역 프로모션", null))
+        val response = controller.createDraft(CreatePromotionDraftRequest("미허용 지역 프로모션", null)).data!!
 
         response.validation.valid.shouldBeFalse()
         (response.validation.reasons.isNotEmpty()).shouldBeTrue()

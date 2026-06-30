@@ -31,7 +31,7 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
             header("Authorization", "Bearer $token")
         }.andExpect {
             status { isForbidden() }
-            jsonPath("$.code") { value("ACCESS_DENIED") }
+            jsonPath("$.error.code") { value("ACCESS_DENIED") }
         }
     }
 
@@ -61,10 +61,10 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
             header("Authorization", "Bearer $token")
         }.andExpect {
             status { isOk() }
-            jsonPath("$.memberId") { value(member.id) }
-            jsonPath("$.balance") { value(500) }
-            jsonPath("$.history.length()") { value(1) }
-            jsonPath("$.history[0].type") { value("EARN") }
+            jsonPath("$.data.memberId") { value(member.id) }
+            jsonPath("$.data.balance") { value(500) }
+            jsonPath("$.data.history.length()") { value(1) }
+            jsonPath("$.data.history[0].type") { value("EARN") }
         }
     }
 
@@ -78,7 +78,7 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
             header("Authorization", "Bearer $token")
         }.andExpect {
             status { isNotFound() }
-            jsonPath("$.code") { value("POINT_ACCOUNT_NOT_FOUND") }
+            jsonPath("$.error.code") { value("POINT_ACCOUNT_NOT_FOUND") }
         }
     }
 }

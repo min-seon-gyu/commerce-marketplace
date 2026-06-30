@@ -1,5 +1,6 @@
 package com.commerce.merchant.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.merchant.application.MerchantService
 import com.commerce.merchant.application.RegisterMerchantRequest
 import com.commerce.merchant.domain.Merchant
@@ -34,24 +35,30 @@ class MerchantController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun register(@RequestBody request: RegisterMerchantRequest) =
-        MerchantResponse.from(merchantService.register(request))
+    fun register(@RequestBody request: RegisterMerchantRequest): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.register(request)))
 
     @PostMapping("/{id}/approve")
-    fun approve(@PathVariable id: Long) = MerchantResponse.from(merchantService.approve(id))
+    fun approve(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.approve(id)))
 
     @PostMapping("/{id}/reject")
-    fun reject(@PathVariable id: Long) = MerchantResponse.from(merchantService.reject(id))
+    fun reject(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.reject(id)))
 
     @PostMapping("/{id}/suspend")
-    fun suspend(@PathVariable id: Long) = MerchantResponse.from(merchantService.suspend(id))
+    fun suspend(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.suspend(id)))
 
     @PostMapping("/{id}/unsuspend")
-    fun unsuspend(@PathVariable id: Long) = MerchantResponse.from(merchantService.unsuspend(id))
+    fun unsuspend(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.unsuspend(id)))
 
     @PostMapping("/{id}/terminate")
-    fun terminate(@PathVariable id: Long) = MerchantResponse.from(merchantService.terminate(id))
+    fun terminate(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.terminate(id)))
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long) = MerchantResponse.from(merchantService.getById(id))
+    fun getById(@PathVariable id: Long): ApiResponse<MerchantResponse> =
+        ApiResponse.ok(MerchantResponse.from(merchantService.getById(id)))
 }

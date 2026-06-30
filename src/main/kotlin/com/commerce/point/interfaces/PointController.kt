@@ -1,5 +1,6 @@
 package com.commerce.point.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.common.security.SecurityUtils
@@ -17,10 +18,10 @@ class PointController(
 ) {
 
     @GetMapping
-    fun getPoints(@PathVariable memberId: Long): PointBalanceResponse {
+    fun getPoints(@PathVariable memberId: Long): ApiResponse<PointBalanceResponse> {
         // 인증: SecurityUtils.currentMemberId()(Plan 1) — 미인증이면 UNAUTHORIZED(401)를 던진다.
         // 인가: 경로 memberId가 인증 주체와 다르면 본인 자원이 아니므로 ACCESS_DENIED(403).
         if (SecurityUtils.currentMemberId() != memberId) throw BusinessException(ErrorCode.ACCESS_DENIED)
-        return pointQueryService.getBalance(memberId)
+        return ApiResponse.ok(pointQueryService.getBalance(memberId))
     }
 }

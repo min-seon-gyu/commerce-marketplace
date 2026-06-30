@@ -19,7 +19,7 @@ class Transaction(
     @Column(nullable = false, length = 20)
     val type: TransactionType,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     val amount: BigDecimal,
 
     val voucherId: Long? = null,

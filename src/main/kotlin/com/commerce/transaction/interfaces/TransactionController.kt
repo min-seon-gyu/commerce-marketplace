@@ -1,5 +1,6 @@
 package com.commerce.transaction.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.idempotency.Idempotent
 import com.commerce.transaction.application.TransactionCancelService
 import com.commerce.transaction.application.TransactionService
@@ -42,16 +43,16 @@ class TransactionController(
 ) {
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): TransactionResponse =
-        TransactionResponse.from(transactionService.getById(id))
+    fun getById(@PathVariable id: Long): ApiResponse<TransactionResponse> =
+        ApiResponse.ok(TransactionResponse.from(transactionService.getById(id)))
 
     @PostMapping("/{id}/cancel")
     @Idempotent
-    fun cancel(@PathVariable id: Long): CancelResponse {
+    fun cancel(@PathVariable id: Long): ApiResponse<CancelResponse> {
         val compensatingId = cancelService.cancel(id)
-        return CancelResponse(
+        return ApiResponse.ok(CancelResponse(
             originalTransactionId = id,
             compensatingTransactionId = compensatingId,
-        )
+        ))
     }
 }

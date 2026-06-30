@@ -1,0 +1,15 @@
+# Prometheus 설정 파일
+# "누구한테서 메트릭을 긁어올 것인가"를 정의
+
+global:
+  scrape_interval: 15s     # 15초마다 메트릭 수집
+  evaluation_interval: 15s # 15초마다 알림 규칙 평가
+
+scrape_configs:
+  # Spring Boot 애플리케이션에서 메트릭 수집
+  - job_name: 'voucher-system'
+    metrics_path: '/actuator/prometheus'   # Spring Actuator 엔드포인트
+    static_configs:
+      - targets: ['host.docker.internal:8080']  # Docker 안에서 호스트의 8080 포트 접근
+        labels:
+          application: 'voucher-system'

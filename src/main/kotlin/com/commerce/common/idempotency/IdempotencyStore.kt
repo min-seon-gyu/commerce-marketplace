@@ -1,6 +1,7 @@
 package com.commerce.common.idempotency
 
 import org.redisson.api.RedissonClient
+import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -20,11 +21,19 @@ class IdempotencyStore(
     private val repository: IdempotencyRepository,
 ) {
     private val redisTtl = Duration.ofHours(24)
+    private val log = LoggerFactory.getLogger(javaClass)
 
-    /** Redis 빠른 경로: 완료된 응답이 캐시에 있으면 반환 (순차 재시도 대응) */
+    /**
+     * Redis 빠른 경로: 완료된 응답이 캐시에 있으면 반환 (순차 재시도 대응).
+     * Redis 장애 시에는 null을 반환해 DB 폴백 경로로 안전하게 강등한다(가용성 우선).
+     */
     fun findCachedResponse(key: String): CachedResponse? {
-        val cached = redissonClient.getBucket<String>(redisKey(key)).get() ?: return null
-        return parse(cached)
+        return try {
+            redissonClient.getBucket<String>(redisKey(key)).get()?.let { parse(it) }
+        } catch (e: Exception) {
+            log.warn("Redis lookup failed for idempotency key {}, falling back to DB: {}", key, e.message)
+            null
+        }
     }
 
     /**
@@ -37,11 +46,11 @@ class IdempotencyStore(
         repository.saveAndFlush(IdempotencyKey(idempotencyKey = key))
     }
 
-    /** 처리 성공 → DB를 COMPLETED로 전환하고 응답을 캐시 */
+    /** 처리 성공 → DB를 COMPLETED로 전환(영속 저장소 우선)하고 응답을 캐시(Redis 실패와 독립) */
     @Transactional
     fun complete(key: String, responseBody: String, responseStatus: Int) {
         repository.findByIdempotencyKey(key)?.complete(responseBody, responseStatus)
-        redissonClient.getBucket<String>(redisKey(key)).set("$responseStatus|$responseBody", redisTtl)
+        cacheQuietly(key, responseStatus, responseBody)
     }
 
     /** 처리 실패/예외 → 선점 해제(행 삭제)하여 재시도가 가능하게 한다 */
@@ -50,14 +59,23 @@ class IdempotencyStore(
         repository.deleteByIdempotencyKey(key)
     }
 
-    /** Redis 미스 시 DB에서 완료된 응답 조회(+Redis 워밍) */
+    /** Redis 미스 시 DB에서 완료된 응답 조회(+Redis 워밍, 실패해도 무시) */
     fun findCompletedInDb(key: String): CachedResponse? {
         val record = repository.findByIdempotencyKey(key) ?: return null
         if (record.status != IdempotencyStatus.COMPLETED) return null
         val body = record.responseBody ?: return null
         val status = record.responseStatus ?: 200
-        redissonClient.getBucket<String>(redisKey(key)).set("$status|$body", redisTtl)
+        cacheQuietly(key, status, body)
         return CachedResponse(status, body)
+    }
+
+    /** Redis 캐시 기록 — 실패는 로깅만 하고 무시(DB가 source of truth) */
+    private fun cacheQuietly(key: String, status: Int, body: String) {
+        try {
+            redissonClient.getBucket<String>(redisKey(key)).set("$status|$body", redisTtl)
+        } catch (e: Exception) {
+            log.warn("Failed to cache idempotency key {} in Redis: {}", key, e.message)
+        }
     }
 
     private fun redisKey(key: String) = "idempotency:$key"

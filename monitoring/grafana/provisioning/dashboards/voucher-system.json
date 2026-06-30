@@ -1,0 +1,147 @@
+{
+    "id": null,
+    "uid": "voucher-system",
+    "title": "Voucher System Dashboard",
+    "tags": ["voucher", "spring-boot"],
+    "timezone": "Asia/Seoul",
+    "refresh": "10s",
+    "time": { "from": "now-1h", "to": "now" },
+    "panels": [
+      {
+        "id": 1,
+        "title": "결제 처리량 (성공/실패)",
+        "description": "초당 결제 성공/실패 건수",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+        "targets": [
+          {
+            "expr": "rate(voucher_redemption_count_total{result=\"success\"}[1m])",
+            "legendFormat": "성공"
+          },
+          {
+            "expr": "rate(voucher_redemption_count_total{result=\"failure\"}[1m])",
+            "legendFormat": "실패"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "ops" }
+        }
+      },
+      {
+        "id": 2,
+        "title": "결제 지연시간 (p50 / p95 / p99)",
+        "description": "결제 처리 응답시간 백분위",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.50, rate(voucher_redemption_duration_seconds_bucket[1m]))",
+            "legendFormat": "p50"
+          },
+          {
+            "expr": "histogram_quantile(0.95, rate(voucher_redemption_duration_seconds_bucket[1m]))",
+            "legendFormat": "p95"
+          },
+          {
+            "expr": "histogram_quantile(0.99, rate(voucher_redemption_duration_seconds_bucket[1m]))",
+            "legendFormat": "p99"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "id": 3,
+        "title": "분산락 획득 시간",
+        "description": "Redis 분산락 획득까지 걸린 시간",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+        "targets": [
+          {
+            "expr": "rate(lock_acquisition_duration_seconds_sum[1m]) / rate(lock_acquisition_duration_seconds_count[1m])",
+            "legendFormat": "평균 락 획득 시간"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "s" }
+        }
+      },
+      {
+        "id": 4,
+        "title": "락 타임아웃 / Redis Fallback",
+        "description": "분산락 실패 및 Redis 장애로 DB 락 전환 건수",
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+        "targets": [
+          {
+            "expr": "lock_acquisition_timeout_total",
+            "legendFormat": "락 타임아웃"
+          },
+          {
+            "expr": "lock_redis_fallback_total",
+            "legendFormat": "Redis Fallback"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "원장 정합성 검증",
+        "description": "불일치 상품권 수 (0이어야 정상)",
+        "type": "gauge",
+        "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
+        "targets": [
+          {
+            "expr": "ledger_verification_imbalance",
+            "legendFormat": "불일치 건수"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "thresholds": {
+              "steps": [
+                { "color": "green", "value": 0 },
+                { "color": "red", "value": 1 }
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 6,
+        "title": "JVM 메모리 사용량",
+        "description": "Heap / Non-Heap 메모리",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+        "targets": [
+          {
+            "expr": "jvm_memory_used_bytes{area=\"heap\"} / 1024 / 1024",
+            "legendFormat": "Heap (MB)"
+          },
+          {
+            "expr": "jvm_memory_used_bytes{area=\"nonheap\"} / 1024 / 1024",
+            "legendFormat": "Non-Heap (MB)"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "decmbytes" }
+        }
+      },
+      {
+        "id": 7,
+        "title": "HTTP 요청 처리량",
+        "description": "상태 코드별 초당 요청 수",
+        "type": "timeseries",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+        "targets": [
+          {
+            "expr": "rate(http_server_requests_seconds_count{uri!~\"/actuator.*\"}[1m])",
+            "legendFormat": "{{method}} {{uri}} [{{status}}]"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": { "unit": "ops" }
+        }
+      }
+    ]
+}

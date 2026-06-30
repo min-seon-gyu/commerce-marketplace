@@ -1,5 +1,6 @@
 package com.commerce.promotion.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.common.security.SecurityUtils
@@ -17,9 +18,9 @@ class MemberCouponController(
 ) {
 
     @GetMapping("/{memberId}/coupons")
-    fun listCoupons(@PathVariable memberId: Long): List<CouponResponse> {
+    fun listCoupons(@PathVariable memberId: Long): ApiResponse<List<CouponResponse>> {
         if (memberId != SecurityUtils.currentMemberId())
             throw BusinessException(ErrorCode.ACCESS_DENIED)
-        return couponIssueService.findByMember(memberId).map { CouponResponse.from(it) }
+        return ApiResponse.ok(couponIssueService.findByMember(memberId).map { CouponResponse.from(it) })
     }
 }

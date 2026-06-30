@@ -1,5 +1,6 @@
 package com.commerce.voucher.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.common.idempotency.Idempotent
@@ -34,35 +35,39 @@ class VoucherController(
         @RequestParam(required = false) regionId: Long?,
         @RequestParam(required = false) status: VoucherStatus?,
         @PageableDefault(size = 20) pageable: Pageable,
-    ): Page<VoucherResponse> =
-        voucherQueryRepository.findByConditions(memberId, regionId, status, pageable)
-            .map { VoucherResponse.from(it) }
+    ): ApiResponse<Page<VoucherResponse>> =
+        ApiResponse.ok(
+            voucherQueryRepository.findByConditions(memberId, regionId, status, pageable)
+                .map { VoucherResponse.from(it) }
+        )
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): VoucherResponse =
-        VoucherResponse.from(
-            voucherJpaRepository.findById(id)
-                .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
+    fun getById(@PathVariable id: Long): ApiResponse<VoucherResponse> =
+        ApiResponse.ok(
+            VoucherResponse.from(
+                voucherJpaRepository.findById(id)
+                    .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
+            )
         )
 
     @PostMapping("/purchase")
     @ResponseStatus(HttpStatus.CREATED)
     @Idempotent
-    fun purchase(@Valid @RequestBody request: PurchaseVoucherRequest): VoucherResponse =
-        VoucherResponse.from(issueService.issue(request.memberId, request.regionId, request.faceValue))
+    fun purchase(@Valid @RequestBody request: PurchaseVoucherRequest): ApiResponse<VoucherResponse> =
+        ApiResponse.ok(VoucherResponse.from(issueService.issue(request.memberId, request.regionId, request.faceValue)))
 
     @PostMapping("/{id}/redeem")
     @Idempotent
-    fun redeem(@PathVariable id: Long, @Valid @RequestBody request: RedeemRequest): RedemptionResult =
-        redemptionOrchestrator.redeem(id, request.merchantId, request.amount, request.couponId)
+    fun redeem(@PathVariable id: Long, @Valid @RequestBody request: RedeemRequest): ApiResponse<RedemptionResult> =
+        ApiResponse.ok(redemptionOrchestrator.redeem(id, request.merchantId, request.amount, request.couponId))
 
     @PostMapping("/{id}/refund")
     @Idempotent
-    fun refund(@PathVariable id: Long, @RequestBody request: RefundRequest): VoucherResponse =
-        VoucherResponse.from(refundService.refund(id, request.memberId))
+    fun refund(@PathVariable id: Long, @RequestBody request: RefundRequest): ApiResponse<VoucherResponse> =
+        ApiResponse.ok(VoucherResponse.from(refundService.refund(id, request.memberId)))
 
     @PostMapping("/{id}/withdraw")
     @Idempotent
-    fun withdraw(@PathVariable id: Long, @RequestBody request: WithdrawRequest): VoucherResponse =
-        VoucherResponse.from(withdrawalService.withdraw(id, request.memberId))
+    fun withdraw(@PathVariable id: Long, @RequestBody request: WithdrawRequest): ApiResponse<VoucherResponse> =
+        ApiResponse.ok(VoucherResponse.from(withdrawalService.withdraw(id, request.memberId)))
 }

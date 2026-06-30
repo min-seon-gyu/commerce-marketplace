@@ -25,7 +25,7 @@
 
 ## 시스템 아키텍처
 
-Aggregate 중심 모듈러 모놀리스. 7개 모듈, 84개 소스 파일, 35개 API 엔드포인트.
+Aggregate 중심 모듈러 모놀리스. 7개 모듈, 87개 소스 파일, 35개 API 엔드포인트.
 
 ```
 com/commerce/
@@ -58,6 +58,23 @@ merchant ─동기──→ transaction (정산 대상 거래 조회)
 
 나머지 ──이벤트──→ audit     (비동기, Kafka 전환 가능)
 ```
+
+### Kafka 전환 전략
+
+현재 `ApplicationEventPublisher`로 구현된 이벤트 시스템은 **Kafka로 교체 가능한 구조**로 설계되었다.
+
+| 현재 (모놀리스) | Kafka 전환 시 |
+|---------------|-------------|
+| `ApplicationEventPublisher.publishEvent()` | `KafkaTemplate.send()` |
+| `@TransactionalEventListener` | `@KafkaListener` |
+| 같은 JVM 내 동기/비동기 전달 | 브로커 기반 비동기 전달 |
+
+**원장 기록은 Kafka로 전환하지 않는다.** 잔액 변경과 원장 기록은 같은 DB 트랜잭션에서 동기 처리해야 정합성(I2, I3)이 보장된다. 이벤트 기반으로 전환하면 커밋 후 리스너 실행 전 장애 시 원장 누락이 발생한다.
+
+**Transactional Outbox 패턴 적용 시:**
+1. 이벤트 발행 시점에 `outbox` 테이블에 INSERT (같은 DB 트랜잭션)
+2. CDC(Change Data Capture) 또는 Polling으로 outbox → Kafka 발행
+3. 도메인 코드 변경 없이 인프라 계층만 교체
 
 ---
 
@@ -375,7 +392,7 @@ Swagger UI: `http://localhost:8080/swagger-ui.html`
 ## 실행 방법
 
 ```bash
-# 1. MySQL + Redis 실행
+# 1. 전체 인프라 실행 (MySQL + Redis + Prometheus + Grafana)
 docker compose up -d
 
 # 2. 애플리케이션 실행
@@ -383,10 +400,27 @@ docker compose up -d
 
 # 3. 테스트 실행 (Testcontainers가 MySQL/Redis를 자동 구동)
 ./gradlew test
-
-# 4. Swagger UI 확인
-open http://localhost:8080/swagger-ui.html
 ```
+
+| 서비스 | URL | 설명 |
+|--------|-----|------|
+| Swagger UI | http://localhost:8080/swagger-ui.html | API 문서 |
+| Grafana | http://localhost:3000 (admin/admin) | 모니터링 대시보드 |
+| Prometheus | http://localhost:9090 | 메트릭 직접 쿼리 |
+
+### 모니터링 대시보드
+
+`docker compose up -d` 시 Prometheus + Grafana가 자동 구성된다. Grafana에 접속하면 **Voucher System Dashboard**가 자동 로드되며, 7개 패널로 시스템 상태를 실시간 모니터링할 수 있다.
+
+| 패널 | 의미 |
+|------|------|
+| 결제 처리량 (성공/실패) | 장애 발생 시 실패율 급증 감지 |
+| 결제 지연시간 (p50/p95/p99) | 성능 저하 조기 감지 |
+| 분산락 획득 시간 | Redis 부하/경합 상태 파악 |
+| 락 타임아웃 / Redis Fallback | Redis 장애 발생 여부 확인 |
+| 원장 정합성 | **0이 아니면 즉시 조사 필요** |
+| JVM 메모리 | 메모리 누수 감지 |
+| HTTP 요청량 | 트래픽 패턴 파악 |
 
 ---
 

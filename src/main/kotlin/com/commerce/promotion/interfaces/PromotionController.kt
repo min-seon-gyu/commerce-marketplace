@@ -1,5 +1,6 @@
 package com.commerce.promotion.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.idempotency.Idempotent
 import com.commerce.common.security.SecurityUtils
 import com.commerce.promotion.application.CouponIssueService
@@ -24,18 +25,18 @@ class PromotionController(
      */
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    fun create(@Valid @RequestBody request: CreatePromotionRequest): PromotionResponse {
+    fun create(@Valid @RequestBody request: CreatePromotionRequest): ApiResponse<PromotionResponse> {
         SecurityUtils.currentMemberId() // 미인증이면 UNAUTHORIZED(401) — ADMIN 역할 검사는 follow-up
-        return PromotionResponse.from(promotionService.create(request))
+        return ApiResponse.ok(PromotionResponse.from(promotionService.create(request)))
     }
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): PromotionResponse =
-        PromotionResponse.from(promotionService.getById(id))
+    fun getById(@PathVariable id: Long): ApiResponse<PromotionResponse> =
+        ApiResponse.ok(PromotionResponse.from(promotionService.getById(id)))
 
     @PostMapping("/{id}/coupons")
     @ResponseStatus(HttpStatus.CREATED)
     @Idempotent
-    fun issueCoupon(@PathVariable id: Long): CouponResponse =
-        CouponResponse.from(couponIssueService.issue(id, SecurityUtils.currentMemberId()))
+    fun issueCoupon(@PathVariable id: Long): ApiResponse<CouponResponse> =
+        ApiResponse.ok(CouponResponse.from(couponIssueService.issue(id, SecurityUtils.currentMemberId())))
 }

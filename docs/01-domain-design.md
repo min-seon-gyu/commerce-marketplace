@@ -127,7 +127,7 @@ CANCEL_REQUESTED → CANCELLED (취소 완료)
 - 모든 금전 변동의 단위. 상품권 사용, 환불, 정산 등 각각이 하나의 Transaction
 - 하나의 Transaction에 2개의 LedgerEntry(차변/대변)가 반드시 쌍으로 생성
 - 원장 기록은 이벤트 리스너가 아닌 **서비스 내 동기 호출**로 동일 DB 트랜잭션에서 처리 (I2, I3 보장)
-- TransactionType: `PURCHASE`, `REDEMPTION`, `REFUND`, `WITHDRAWAL`, `EXPIRY`, `CANCELLATION`
+- TransactionType: `PURCHASE`, `REDEMPTION`, `REFUND`, `WITHDRAWAL`, `EXPIRY`, `CANCELLATION`, `SETTLEMENT`
 - TransactionStatus와 TransactionType은 `TransactionStatus.kt` 파일에 함께 정의
 
 ### 1.8 Settlement (정산)

@@ -1,5 +1,6 @@
 package com.commerce.merchant.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.merchant.application.SettlementService
 import com.commerce.merchant.domain.Settlement
 import org.springframework.format.annotation.DateTimeFormat
@@ -50,20 +51,20 @@ class SettlementController(
 
     @PostMapping("/calculate")
     @ResponseStatus(HttpStatus.CREATED)
-    fun calculate(@RequestBody request: CalculateSettlementRequest): SettlementResponse =
-        SettlementResponse.from(
+    fun calculate(@RequestBody request: CalculateSettlementRequest): ApiResponse<SettlementResponse> =
+        ApiResponse.ok(SettlementResponse.from(
             settlementService.calculate(request.merchantId, request.periodStart, request.periodEnd)
-        )
+        ))
 
     @PostMapping("/{id}/confirm")
-    fun confirm(@PathVariable id: Long): SettlementResponse =
-        SettlementResponse.from(settlementService.confirm(id))
+    fun confirm(@PathVariable id: Long): ApiResponse<SettlementResponse> =
+        ApiResponse.ok(SettlementResponse.from(settlementService.confirm(id)))
 
     @PostMapping("/{id}/dispute")
-    fun dispute(@PathVariable id: Long, @RequestBody request: DisputeRequest): SettlementResponse =
-        SettlementResponse.from(settlementService.dispute(id, request.reason))
+    fun dispute(@PathVariable id: Long, @RequestBody request: DisputeRequest): ApiResponse<SettlementResponse> =
+        ApiResponse.ok(SettlementResponse.from(settlementService.dispute(id, request.reason)))
 
     @GetMapping("/{id}")
-    fun getById(@PathVariable id: Long): SettlementResponse =
-        SettlementResponse.from(settlementService.getById(id))
+    fun getById(@PathVariable id: Long): ApiResponse<SettlementResponse> =
+        ApiResponse.ok(SettlementResponse.from(settlementService.getById(id)))
 }

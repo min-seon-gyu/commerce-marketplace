@@ -55,5 +55,36 @@ services:
       - "8080:8080"
     restart: unless-stopped
 
+  # ──────────────────────────────────────
+  # 모니터링 스택 (Prometheus + Grafana)
+  # ──────────────────────────────────────
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: voucher-prometheus
+    ports:
+      - "9090:9090"                        # http://localhost:9090 에서 Prometheus UI 접속
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml  # 수집 대상 설정
+      - prometheus-data:/prometheus        # 메트릭 데이터 영속 저장
+    extra_hosts:
+      - "host.docker.internal:host-gateway"  # Docker 안에서 호스트(Spring Boot)에 접근
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: voucher-grafana
+    ports:
+      - "3000:3000"                        # http://localhost:3000 에서 Grafana 접속
+    environment:
+      GF_SECURITY_ADMIN_USER: admin        # 초기 로그인 ID
+      GF_SECURITY_ADMIN_PASSWORD: admin    # 초기 로그인 비밀번호
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning  # 데이터소스 + 대시보드 자동 설정
+      - grafana-data:/var/lib/grafana      # 대시보드 변경 사항 영속 저장
+    depends_on:
+      - prometheus                         # Prometheus가 먼저 시작된 후 Grafana 시작
+
 volumes:
   mysql-data:
+  prometheus-data:
+  grafana-data:

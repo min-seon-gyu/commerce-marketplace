@@ -1,5 +1,6 @@
 package com.commerce.promotion.interfaces
 
+import com.commerce.common.api.ApiResponse
 import com.commerce.common.idempotency.Idempotent
 import com.commerce.common.security.SecurityUtils
 import com.commerce.promotion.application.LlmDraftCommand
@@ -25,12 +26,12 @@ class PromotionDraftController(
      */
     @Idempotent
     @PostMapping("/draft")
-    fun createDraft(@Valid @RequestBody request: CreatePromotionDraftRequest): PromotionDraftResponse {
+    fun createDraft(@Valid @RequestBody request: CreatePromotionDraftRequest): ApiResponse<PromotionDraftResponse> {
         val memberId = SecurityUtils.currentMemberId()
         val result = promotionDraftService.draft(
             LlmDraftCommand(prompt = request.prompt, context = request.context),
             requesterMemberId = memberId,
         )
-        return PromotionDraftResponse.from(result)
+        return ApiResponse.ok(PromotionDraftResponse.from(result))
     }
 }

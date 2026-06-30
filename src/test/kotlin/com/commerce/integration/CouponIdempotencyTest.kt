@@ -119,7 +119,7 @@ class CouponIdempotencyTest {
                     response.statusCode.is2xxSuccessful -> {
                         success2xx.incrementAndGet()
                         response.body?.let { rb ->
-                            val txId = objectMapper.readTree(rb).get("transactionId").asLong()
+                            val txId = objectMapper.readTree(rb).get("data").get("transactionId").asLong()
                             successTransactionId.set(txId)
                         }
                     }
@@ -159,7 +159,7 @@ class CouponIdempotencyTest {
         // 캐시 경로 검증: 동시 블래스트 완료 후 동일 키로 순차 재시도 → 캐시된 2xx 반환
         val retryResponse = restTemplate.postForEntity(url, request, String::class.java)
         retryResponse.statusCode.is2xxSuccessful shouldBe true
-        val retryTransactionId = objectMapper.readTree(retryResponse.body).get("transactionId").asLong()
+        val retryTransactionId = objectMapper.readTree(retryResponse.body).get("data").get("transactionId").asLong()
         retryTransactionId shouldBe successTransactionId.get()
 
         // 재시도 후에도 DB 상태 불변 — 추가 처리 없음

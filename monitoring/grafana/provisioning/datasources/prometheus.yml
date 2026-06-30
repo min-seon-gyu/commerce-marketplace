@@ -1,0 +1,12 @@
+# Grafana 데이터 소스 자동 설정
+# Grafana 시작 시 Prometheus를 데이터 소스로 자동 등록
+
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    type: prometheus
+    access: proxy                          # Grafana 서버가 Prometheus에 대신 요청
+    url: http://prometheus:9090            # Docker 네트워크 내부에서 Prometheus 접근
+    isDefault: true                        # 기본 데이터 소스로 설정
+    editable: true

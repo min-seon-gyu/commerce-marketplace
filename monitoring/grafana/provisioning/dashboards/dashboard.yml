@@ -1,0 +1,15 @@
+# Grafana 대시보드 프로비저닝 설정
+# 시작 시 JSON 파일에서 대시보드를 자동으로 불러옴
+
+apiVersion: 1
+
+providers:
+  - name: 'default'
+    orgId: 1
+    folder: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    options:
+      path: /etc/grafana/provisioning/dashboards  # 대시보드 JSON 파일 위치
+      foldersFromFilesStructure: false

@@ -23,7 +23,7 @@ class LedgerEntry(
     @Column(nullable = false, length = 10)
     val side: LedgerEntrySide,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     val amount: BigDecimal,
 
     @Column(nullable = false)

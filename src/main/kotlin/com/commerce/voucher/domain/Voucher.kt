@@ -21,10 +21,10 @@ class Voucher(
     @Column(nullable = false, unique = true, length = 19)
     val voucherCode: String,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     val faceValue: BigDecimal,
 
-    @Column(nullable = false)
+    @Column(nullable = false, precision = 15, scale = 2)
     var balance: BigDecimal,
 
     @Column(nullable = false)
@@ -101,6 +101,7 @@ class Voucher(
     }
 
     fun restoreBalance(amount: BigDecimal) {
+        require(balance + amount <= faceValue) { "복원 후 잔액이 액면가를 초과할 수 없습니다" }
         balance += amount
         status = if (balance.compareTo(faceValue) == 0) VoucherStatus.ACTIVE else VoucherStatus.PARTIALLY_USED
     }
