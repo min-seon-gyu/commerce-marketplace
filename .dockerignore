@@ -1,0 +1,17 @@
+.git
+.gitignore
+.github
+.gradle
+build
+**/build
+load-test
+docs
+*.md
+.idea
+.vscode
+.env
+.env.*
+!.env.example
+Dockerfile
+docker-compose.yml
+.superpowers

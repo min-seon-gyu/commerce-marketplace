@@ -1,12 +1,12 @@
 # 모바일 상품권 시스템 구현 계획
 
-> **상태: 전체 구현 완료 + 프로덕션 품질 보완 + 동시성 허점 수정** — 16개 태스크 완료, 35개 커밋, 소스 87개 파일, 테스트 13개 파일
+> **상태: 전체 구현 완료 + 코드 품질 개선** — 16개 태스크 모두 완료, 28개 커밋, 소스 84개 파일, 테스트 13개 파일
 
-**목표:** 지역사랑상품권의 발행-유통-정산 전 생애주기를 관리하는 백엔드 시스템 구축. 재무 무결성, 감사 추적성, 동시성 안전을 KOMSCO 포트폴리오로 증명.
+**목표:** 지역사랑상품권의 발행-유통-정산 전 생애주기를 관리하는 백엔드 시스템 구축. 재무 무결성, 감사 추적성, 동시성 안전을 커머스 백엔드 포트폴리오로 증명.
 
-**아키텍처:** Aggregate 중심 모듈러 모놀리스, 6개 도메인 모듈 (region, member, merchant, voucher, transaction, ledger) + 공통 모듈 + config. 하이브리드 복식부기 + 동기 원장 기록. 도메인 이벤트는 감사/알림 부수효과에만 사용.
+**아키텍처:** Aggregate 중심 모듈러 모놀리스, 6개 도메인 모듈 (region, member, merchant, voucher, transaction, ledger) + 공통 모듈 + config. 하이브리드 복식부기 + 동기 원장 기록. 도메인 이벤트는 감사/알림 부수효과에만 사용. 분산락 사용 서비스는 TransactionTemplate으로 락-커밋 순서 보장. Region 월 한도는 Redis Lua 스크립트로 원자적 검증.
 
-**기술 스택:** Kotlin 1.9.23, Spring Boot 3.2.5, JPA + QueryDSL 5.1.0, MySQL 8.x, Redis (Redisson 3.27.2), JWT (jjwt 0.12.5), Flyway, Swagger/OpenAPI, JUnit 5 + Kotest 5.8.1 + Testcontainers 1.19.7, Gradle Kotlin DSL, Docker Compose
+**기술 스택:** Kotlin 1.9.23, Spring Boot 3.2.5, JPA + QueryDSL 5.1.0, MySQL 8.x, Redis (Redisson 3.27.2), JWT (jjwt 0.12.5), Swagger/OpenAPI, JUnit 5 + Kotest 5.8.1 + Testcontainers 1.19.7, Gradle Kotlin DSL, Docker Compose
 
 **스펙 문서:**
 - `docs/01-domain-design.md` — 도메인 엔티티, 상태 머신, 불변식
@@ -14,9 +14,9 @@
 - `docs/03-implementation-roadmap.md` — 태스크 개요 및 의존성 그래프
 
 **기본 경로:**
-- 프로젝트 루트: `/Users/seongyumin/Documents/study/komsco/`
-- 소스: `src/main/kotlin/com/komsco/voucher/`
-- 테스트: `src/test/kotlin/com/komsco/voucher/`
+- 프로젝트 루트: `<project-root>`
+- 소스: `src/main/kotlin/com/commerce/`
+- 테스트: `src/test/kotlin/com/commerce/`
 - 리소스: `src/main/resources/`
 - 테스트 리소스: `src/test/resources/`
 
@@ -30,7 +30,7 @@
 - Create: `docker-compose.yml`
 - Create: `src/main/resources/application.yml`
 - Create: `src/main/resources/application-test.yml`
-- Create: `src/main/kotlin/com/komsco/voucher/VoucherApplication.kt`
+- Create: `src/main/kotlin/com/commerce/VoucherApplication.kt`
 - Create: `.gitignore`
 
 - [x] **Step 1: Initialize Gradle project**
@@ -53,7 +53,7 @@ plugins {
     kotlin("kapt") version "1.9.23"
 }
 
-group = "com.komsco"
+group = "com.commerce"
 version = "0.0.1-SNAPSHOT"
 
 java {
@@ -198,9 +198,9 @@ spring:
 
 - [x] **Step 4: Create main application class**
 
-Create `src/main/kotlin/com/komsco/voucher/VoucherApplication.kt`:
+Create `src/main/kotlin/com/commerce/VoucherApplication.kt`:
 ```kotlin
-package com.komsco.voucher
+package com.commerce
 
 import org.springframework.boot.autoconfigure.SpringBootApplication
 import org.springframework.boot.runApplication
@@ -232,9 +232,9 @@ src/main/generated/
 
 - [x] **Step 6: Create Testcontainers base test config**
 
-Create `src/test/kotlin/com/komsco/voucher/support/IntegrationTestSupport.kt`:
+Create `src/test/kotlin/com/commerce/support/IntegrationTestSupport.kt`:
 ```kotlin
-package com.komsco.voucher.support
+package com.commerce.support
 
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.test.context.ActiveProfiles
@@ -278,12 +278,12 @@ abstract class IntegrationTestSupport {
 
 - [x] **Step 7: Verify project builds**
 
-Run: `cd /Users/seongyumin/Documents/study/komsco && ./gradlew build`
+Run: `cd <project-root> && ./gradlew build`
 Expected: BUILD SUCCESSFUL
 
 - [x] **Step 8: Verify Docker Compose starts**
 
-Run: `cd /Users/seongyumin/Documents/study/komsco && docker compose up -d && docker compose ps`
+Run: `cd <project-root> && docker compose up -d && docker compose ps`
 Expected: mysql and redis containers running
 
 - [x] **Step 9: Commit**
@@ -299,22 +299,22 @@ git commit -m "feat: initialize project with Spring Boot 3.x, Kotlin, Docker Com
 ## 태스크 2: 공통 모듈 — BaseEntity, 예외 체계, 감사 로그
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/common/domain/BaseEntity.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/domain/DomainEvent.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/exception/ErrorCode.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/exception/BusinessException.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/exception/GlobalExceptionHandler.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/audit/AuditLog.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/audit/AuditLogRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/audit/AuditEventListener.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/audit/AuditSeverity.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/common/audit/AuditEventListenerTest.kt`
+- Create: `src/main/kotlin/com/commerce/common/domain/BaseEntity.kt`
+- Create: `src/main/kotlin/com/commerce/common/domain/DomainEvent.kt`
+- Create: `src/main/kotlin/com/commerce/common/exception/ErrorCode.kt`
+- Create: `src/main/kotlin/com/commerce/common/exception/BusinessException.kt`
+- Create: `src/main/kotlin/com/commerce/common/exception/GlobalExceptionHandler.kt`
+- Create: `src/main/kotlin/com/commerce/common/audit/AuditLog.kt`
+- Create: `src/main/kotlin/com/commerce/common/audit/AuditLogRepository.kt`
+- Create: `src/main/kotlin/com/commerce/common/audit/AuditEventListener.kt`
+- Create: `src/main/kotlin/com/commerce/common/audit/AuditSeverity.kt`
+- Test: `src/test/kotlin/com/commerce/common/audit/AuditEventListenerTest.kt`
 
 - [x] **Step 1: Write BaseEntity test**
 
-Create `src/test/kotlin/com/komsco/voucher/common/domain/BaseEntityTest.kt`:
+Create `src/test/kotlin/com/commerce/common/domain/BaseEntityTest.kt`:
 ```kotlin
-package com.komsco.voucher.common.domain
+package com.commerce.common.domain
 
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldNotBe
@@ -331,14 +331,14 @@ class BaseEntityTest : DescribeSpec({
 
 - [x] **Step 2: Run test — expect FAIL**
 
-Run: `./gradlew test --tests "com.komsco.voucher.common.domain.BaseEntityTest"`
+Run: `./gradlew test --tests "com.commerce.common.domain.BaseEntityTest"`
 Expected: FAIL — BaseEntity class not found
 
 - [x] **Step 3: Implement BaseEntity**
 
-Create `src/main/kotlin/com/komsco/voucher/common/domain/BaseEntity.kt`:
+Create `src/main/kotlin/com/commerce/common/domain/BaseEntity.kt`:
 ```kotlin
-package com.komsco.voucher.common.domain
+package com.commerce.common.domain
 
 import jakarta.persistence.*
 import java.time.LocalDateTime
@@ -369,14 +369,14 @@ abstract class BaseEntity {
 
 - [x] **Step 4: Run test — expect PASS**
 
-Run: `./gradlew test --tests "com.komsco.voucher.common.domain.BaseEntityTest"`
+Run: `./gradlew test --tests "com.commerce.common.domain.BaseEntityTest"`
 Expected: PASS
 
 - [x] **Step 5: Implement DomainEvent base class**
 
-Create `src/main/kotlin/com/komsco/voucher/common/domain/DomainEvent.kt`:
+Create `src/main/kotlin/com/commerce/common/domain/DomainEvent.kt`:
 ```kotlin
-package com.komsco.voucher.common.domain
+package com.commerce.common.domain
 
 import java.time.LocalDateTime
 import java.util.UUID
@@ -393,9 +393,9 @@ abstract class DomainEvent(
 
 - [x] **Step 6: Implement ErrorCode and BusinessException**
 
-Create `src/main/kotlin/com/komsco/voucher/common/exception/ErrorCode.kt`:
+Create `src/main/kotlin/com/commerce/common/exception/ErrorCode.kt`:
 ```kotlin
-package com.komsco.voucher.common.exception
+package com.commerce.common.exception
 
 import org.springframework.http.HttpStatus
 
@@ -439,9 +439,9 @@ enum class ErrorCode(
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/common/exception/BusinessException.kt`:
+Create `src/main/kotlin/com/commerce/common/exception/BusinessException.kt`:
 ```kotlin
-package com.komsco.voucher.common.exception
+package com.commerce.common.exception
 
 class BusinessException(
     val errorCode: ErrorCode,
@@ -449,9 +449,9 @@ class BusinessException(
 ) : RuntimeException(message)
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/common/exception/GlobalExceptionHandler.kt`:
+Create `src/main/kotlin/com/commerce/common/exception/GlobalExceptionHandler.kt`:
 ```kotlin
-package com.komsco.voucher.common.exception
+package com.commerce.common.exception
 
 import org.slf4j.LoggerFactory
 import org.springframework.http.ResponseEntity
@@ -480,12 +480,12 @@ class GlobalExceptionHandler {
 
 - [x] **Step 7: Write AuditLog entity test**
 
-Create `src/test/kotlin/com/komsco/voucher/common/audit/AuditEventListenerTest.kt`:
+Create `src/test/kotlin/com/commerce/common/audit/AuditEventListenerTest.kt`:
 ```kotlin
-package com.komsco.voucher.common.audit
+package com.commerce.common.audit
 
-import com.komsco.voucher.common.domain.DomainEvent
-import com.komsco.voucher.support.IntegrationTestSupport
+import com.commerce.common.domain.DomainEvent
+import com.commerce.support.IntegrationTestSupport
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
@@ -529,23 +529,23 @@ class AuditEventListenerTest : IntegrationTestSupport() {
 
 - [x] **Step 8: Run test — expect FAIL**
 
-Run: `./gradlew test --tests "com.komsco.voucher.common.audit.AuditEventListenerTest"`
+Run: `./gradlew test --tests "com.commerce.common.audit.AuditEventListenerTest"`
 Expected: FAIL — AuditLog classes not found
 
 - [x] **Step 9: Implement AuditLog entity and listener**
 
-Create `src/main/kotlin/com/komsco/voucher/common/audit/AuditSeverity.kt`:
+Create `src/main/kotlin/com/commerce/common/audit/AuditSeverity.kt`:
 ```kotlin
-package com.komsco.voucher.common.audit
+package com.commerce.common.audit
 
 enum class AuditSeverity {
     CRITICAL, HIGH, MEDIUM
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/common/audit/AuditLog.kt`:
+Create `src/main/kotlin/com/commerce/common/audit/AuditLog.kt`:
 ```kotlin
-package com.komsco.voucher.common.audit
+package com.commerce.common.audit
 
 import jakarta.persistence.*
 import org.hibernate.annotations.JdbcTypeCode
@@ -610,20 +610,20 @@ class AuditLog(
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/common/audit/AuditLogRepository.kt`:
+Create `src/main/kotlin/com/commerce/common/audit/AuditLogRepository.kt`:
 ```kotlin
-package com.komsco.voucher.common.audit
+package com.commerce.common.audit
 
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface AuditLogRepository : JpaRepository<AuditLog, Long>
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/common/audit/AuditEventListener.kt`:
+Create `src/main/kotlin/com/commerce/common/audit/AuditEventListener.kt`:
 ```kotlin
-package com.komsco.voucher.common.audit
+package com.commerce.common.audit
 
-import com.komsco.voucher.common.domain.DomainEvent
+import com.commerce.common.domain.DomainEvent
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionalEventListener
@@ -725,7 +725,7 @@ class AuditEventListener(
 
 - [x] **Step 10: Run test — expect PASS**
 
-Run: `./gradlew test --tests "com.komsco.voucher.common.audit.AuditEventListenerTest"`
+Run: `./gradlew test --tests "com.commerce.common.audit.AuditEventListenerTest"`
 Expected: PASS
 
 - [x] **Step 11: Commit**
@@ -740,25 +740,25 @@ git commit -m "feat: add common module with BaseEntity, exception hierarchy, aud
 ## 태스크 3: Region 모듈
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/region/domain/Region.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/domain/RegionPolicy.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/domain/RegionStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/application/RegionService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/infrastructure/RegionJpaRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/interfaces/RegionController.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/interfaces/dto/RegionRequest.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/region/interfaces/dto/RegionResponse.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/region/domain/RegionTest.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/region/application/RegionServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/region/domain/Region.kt`
+- Create: `src/main/kotlin/com/commerce/region/domain/RegionPolicy.kt`
+- Create: `src/main/kotlin/com/commerce/region/domain/RegionStatus.kt`
+- Create: `src/main/kotlin/com/commerce/region/application/RegionService.kt`
+- Create: `src/main/kotlin/com/commerce/region/infrastructure/RegionJpaRepository.kt`
+- Create: `src/main/kotlin/com/commerce/region/interfaces/RegionController.kt`
+- Create: `src/main/kotlin/com/commerce/region/interfaces/dto/RegionRequest.kt`
+- Create: `src/main/kotlin/com/commerce/region/interfaces/dto/RegionResponse.kt`
+- Test: `src/test/kotlin/com/commerce/region/domain/RegionTest.kt`
+- Test: `src/test/kotlin/com/commerce/region/application/RegionServiceTest.kt`
 
 - [x] **Step 1: Write Region domain test**
 
-Create `src/test/kotlin/com/komsco/voucher/region/domain/RegionTest.kt`:
+Create `src/test/kotlin/com/commerce/region/domain/RegionTest.kt`:
 ```kotlin
-package com.komsco.voucher.region.domain
+package com.commerce.region.domain
 
-import com.komsco.voucher.common.exception.BusinessException
-import com.komsco.voucher.common.exception.ErrorCode
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -810,14 +810,14 @@ fun createRegion(status: RegionStatus = RegionStatus.ACTIVE): Region {
 
 - [x] **Step 2: Run test — expect FAIL**
 
-Run: `./gradlew test --tests "com.komsco.voucher.region.domain.RegionTest"`
+Run: `./gradlew test --tests "com.commerce.region.domain.RegionTest"`
 Expected: FAIL
 
 - [x] **Step 3: Implement Region domain**
 
-Create `src/main/kotlin/com/komsco/voucher/region/domain/RegionStatus.kt`:
+Create `src/main/kotlin/com/commerce/region/domain/RegionStatus.kt`:
 ```kotlin
-package com.komsco.voucher.region.domain
+package com.commerce.region.domain
 
 enum class RegionStatus {
     ACTIVE, SUSPENDED, DEACTIVATED
@@ -828,9 +828,9 @@ enum class SettlementPeriod {
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/domain/RegionPolicy.kt`:
+Create `src/main/kotlin/com/commerce/region/domain/RegionPolicy.kt`:
 ```kotlin
-package com.komsco.voucher.region.domain
+package com.commerce.region.domain
 
 import jakarta.persistence.Column
 import jakarta.persistence.Embeddable
@@ -858,13 +858,13 @@ data class RegionPolicy(
 )
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/domain/Region.kt`:
+Create `src/main/kotlin/com/commerce/region/domain/Region.kt`:
 ```kotlin
-package com.komsco.voucher.region.domain
+package com.commerce.region.domain
 
-import com.komsco.voucher.common.domain.BaseEntity
-import com.komsco.voucher.common.exception.BusinessException
-import com.komsco.voucher.common.exception.ErrorCode
+import com.commerce.common.domain.BaseEntity
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
 import jakarta.persistence.*
 
 @Entity
@@ -912,16 +912,16 @@ class Region(
 
 - [x] **Step 4: Run domain test — expect PASS**
 
-Run: `./gradlew test --tests "com.komsco.voucher.region.domain.RegionTest"`
+Run: `./gradlew test --tests "com.commerce.region.domain.RegionTest"`
 Expected: PASS
 
 - [x] **Step 5: Implement Region service, repository, controller, DTOs**
 
-Create `src/main/kotlin/com/komsco/voucher/region/infrastructure/RegionJpaRepository.kt`:
+Create `src/main/kotlin/com/commerce/region/infrastructure/RegionJpaRepository.kt`:
 ```kotlin
-package com.komsco.voucher.region.infrastructure
+package com.commerce.region.infrastructure
 
-import com.komsco.voucher.region.domain.Region
+import com.commerce.region.domain.Region
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface RegionJpaRepository : JpaRepository<Region, Long> {
@@ -929,9 +929,9 @@ interface RegionJpaRepository : JpaRepository<Region, Long> {
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/interfaces/dto/RegionRequest.kt`:
+Create `src/main/kotlin/com/commerce/region/interfaces/dto/RegionRequest.kt`:
 ```kotlin
-package com.komsco.voucher.region.interfaces.dto
+package com.commerce.region.interfaces.dto
 
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.Positive
@@ -948,11 +948,11 @@ data class CreateRegionRequest(
 )
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/interfaces/dto/RegionResponse.kt`:
+Create `src/main/kotlin/com/commerce/region/interfaces/dto/RegionResponse.kt`:
 ```kotlin
-package com.komsco.voucher.region.interfaces.dto
+package com.commerce.region.interfaces.dto
 
-import com.komsco.voucher.region.domain.Region
+import com.commerce.region.domain.Region
 import java.math.BigDecimal
 
 data class RegionResponse(
@@ -982,15 +982,15 @@ data class RegionResponse(
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/application/RegionService.kt`:
+Create `src/main/kotlin/com/commerce/region/application/RegionService.kt`:
 ```kotlin
-package com.komsco.voucher.region.application
+package com.commerce.region.application
 
-import com.komsco.voucher.common.exception.BusinessException
-import com.komsco.voucher.common.exception.ErrorCode
-import com.komsco.voucher.region.domain.*
-import com.komsco.voucher.region.infrastructure.RegionJpaRepository
-import com.komsco.voucher.region.interfaces.dto.CreateRegionRequest
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
+import com.commerce.region.domain.*
+import com.commerce.region.infrastructure.RegionJpaRepository
+import com.commerce.region.interfaces.dto.CreateRegionRequest
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 
@@ -1028,13 +1028,13 @@ class RegionService(
 }
 ```
 
-Create `src/main/kotlin/com/komsco/voucher/region/interfaces/RegionController.kt`:
+Create `src/main/kotlin/com/commerce/region/interfaces/RegionController.kt`:
 ```kotlin
-package com.komsco.voucher.region.interfaces
+package com.commerce.region.interfaces
 
-import com.komsco.voucher.region.application.RegionService
-import com.komsco.voucher.region.interfaces.dto.CreateRegionRequest
-import com.komsco.voucher.region.interfaces.dto.RegionResponse
+import com.commerce.region.application.RegionService
+import com.commerce.region.interfaces.dto.CreateRegionRequest
+import com.commerce.region.interfaces.dto.RegionResponse
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
@@ -1062,13 +1062,13 @@ class RegionController(
 
 - [x] **Step 6: Write integration test for RegionService**
 
-Create `src/test/kotlin/com/komsco/voucher/region/application/RegionServiceTest.kt`:
+Create `src/test/kotlin/com/commerce/region/application/RegionServiceTest.kt`:
 ```kotlin
-package com.komsco.voucher.region.application
+package com.commerce.region.application
 
-import com.komsco.voucher.region.domain.RegionStatus
-import com.komsco.voucher.region.interfaces.dto.CreateRegionRequest
-import com.komsco.voucher.support.IntegrationTestSupport
+import com.commerce.region.domain.RegionStatus
+import com.commerce.region.interfaces.dto.CreateRegionRequest
+import com.commerce.support.IntegrationTestSupport
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import org.junit.jupiter.api.Test
@@ -1102,7 +1102,7 @@ class RegionServiceTest : IntegrationTestSupport() {
 
 - [x] **Step 7: Run all tests — expect PASS**
 
-Run: `./gradlew test --tests "com.komsco.voucher.region.*"`
+Run: `./gradlew test --tests "com.commerce.region.*"`
 Expected: PASS
 
 - [x] **Step 8: Commit**
@@ -1117,15 +1117,15 @@ git commit -m "feat: add Region module with entity, policy, service, and API"
 ## 태스크 4: Member 모듈
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/member/domain/Member.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/domain/MemberStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/domain/MemberRole.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/application/MemberService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/infrastructure/MemberJpaRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/interfaces/MemberController.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/member/interfaces/dto/`
-- Create: `src/main/kotlin/com/komsco/voucher/config/SecurityConfig.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/member/domain/MemberTest.kt`
+- Create: `src/main/kotlin/com/commerce/member/domain/Member.kt`
+- Create: `src/main/kotlin/com/commerce/member/domain/MemberStatus.kt`
+- Create: `src/main/kotlin/com/commerce/member/domain/MemberRole.kt`
+- Create: `src/main/kotlin/com/commerce/member/application/MemberService.kt`
+- Create: `src/main/kotlin/com/commerce/member/infrastructure/MemberJpaRepository.kt`
+- Create: `src/main/kotlin/com/commerce/member/interfaces/MemberController.kt`
+- Create: `src/main/kotlin/com/commerce/member/interfaces/dto/`
+- Create: `src/main/kotlin/com/commerce/config/SecurityConfig.kt`
+- Test: `src/test/kotlin/com/commerce/member/domain/MemberTest.kt`
 
 Follow the same TDD pattern as Task 3:
 
@@ -1190,14 +1190,14 @@ git commit -m "feat: add Member module with JWT auth and role-based security"
 ## 태스크 5: Merchant 모듈
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/Merchant.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/MerchantStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/MerchantCategory.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/event/MerchantApprovedEvent.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/application/MerchantService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/infrastructure/MerchantJpaRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/interfaces/MerchantController.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/merchant/domain/MerchantTest.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/Merchant.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/MerchantStatus.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/MerchantCategory.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/event/MerchantApprovedEvent.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/application/MerchantService.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/infrastructure/MerchantJpaRepository.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/interfaces/MerchantController.kt`
+- Test: `src/test/kotlin/com/commerce/merchant/domain/MerchantTest.kt`
 
 - [x] **Step 1: Write Merchant domain tests**
 
@@ -1263,18 +1263,18 @@ git commit -m "feat: add Merchant module with state machine and approval flow"
 ## 태스크 6: Ledger 및 Transaction 모듈 ★★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/domain/LedgerEntry.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/domain/LedgerEntryType.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/domain/AccountCode.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/application/LedgerService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/infrastructure/LedgerJpaRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/domain/Transaction.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/domain/TransactionStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/domain/TransactionType.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/application/TransactionService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/infrastructure/TransactionJpaRepository.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/ledger/application/LedgerServiceTest.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/ledger/domain/LedgerEntryTest.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/domain/LedgerEntry.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/domain/LedgerEntryType.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/domain/AccountCode.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/application/LedgerService.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/infrastructure/LedgerJpaRepository.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/domain/Transaction.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/domain/TransactionStatus.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/domain/TransactionType.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/application/TransactionService.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/infrastructure/TransactionJpaRepository.kt`
+- Test: `src/test/kotlin/com/commerce/ledger/application/LedgerServiceTest.kt`
+- Test: `src/test/kotlin/com/commerce/ledger/domain/LedgerEntryTest.kt`
 
 - [x] **Step 1: Write LedgerEntry immutability test**
 
@@ -1471,12 +1471,12 @@ git commit -m "feat: add Ledger and Transaction modules with immutable double-en
 ## 태스크 7: 멱등키 모듈
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/common/idempotency/IdempotencyKey.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/idempotency/IdempotencyRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/idempotency/IdempotencyInterceptor.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/common/idempotency/Idempotent.kt` (annotation)
-- Create: `src/main/kotlin/com/komsco/voucher/common/idempotency/IdempotencyRedisRepository.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/common/idempotency/IdempotencyInterceptorTest.kt`
+- Create: `src/main/kotlin/com/commerce/common/idempotency/IdempotencyKey.kt`
+- Create: `src/main/kotlin/com/commerce/common/idempotency/IdempotencyRepository.kt`
+- Create: `src/main/kotlin/com/commerce/common/idempotency/IdempotencyInterceptor.kt`
+- Create: `src/main/kotlin/com/commerce/common/idempotency/Idempotent.kt` (annotation)
+- Create: `src/main/kotlin/com/commerce/common/idempotency/IdempotencyRedisRepository.kt`
+- Test: `src/test/kotlin/com/commerce/common/idempotency/IdempotencyInterceptorTest.kt`
 
 - [x] **Step 1: Write idempotency test — duplicate request returns same response**
 
@@ -1538,18 +1538,18 @@ git commit -m "feat: add idempotency module with Redis+DB dual storage and AOP i
 ## 태스크 8: Voucher 모듈 — 발행 ★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/Voucher.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/VoucherStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/VoucherCodeGenerator.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/event/VoucherIssuedEvent.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/application/VoucherIssueService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/infrastructure/VoucherJpaRepository.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/infrastructure/VoucherLockManager.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/interfaces/VoucherController.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/config/RedisConfig.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/domain/VoucherTest.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/domain/VoucherCodeGeneratorTest.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/application/VoucherIssueServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/Voucher.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/VoucherStatus.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/VoucherCodeGenerator.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/event/VoucherIssuedEvent.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/application/VoucherIssueService.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/infrastructure/VoucherJpaRepository.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/infrastructure/VoucherLockManager.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/interfaces/VoucherController.kt`
+- Create: `src/main/kotlin/com/commerce/config/RedisConfig.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/domain/VoucherTest.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/domain/VoucherCodeGeneratorTest.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/application/VoucherIssueServiceTest.kt`
 
 - [x] **Step 1: Write VoucherCodeGenerator test**
 
@@ -1764,10 +1764,10 @@ git commit -m "feat: add Voucher issuance with distributed lock, atomic region c
 ## 태스크 9: Voucher 모듈 — 결제(사용) ★★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/application/VoucherRedemptionService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/event/VoucherRedeemedEvent.kt`
-- Modify: `src/main/kotlin/com/komsco/voucher/voucher/interfaces/VoucherController.kt` (add redeem endpoint)
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/application/VoucherRedemptionServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/application/VoucherRedemptionService.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/event/VoucherRedeemedEvent.kt`
+- Modify: `src/main/kotlin/com/commerce/voucher/interfaces/VoucherController.kt` (add redeem endpoint)
+- Test: `src/test/kotlin/com/commerce/voucher/application/VoucherRedemptionServiceTest.kt`
 
 - [x] **Step 1: Write redemption test — happy path**
 
@@ -1924,9 +1924,9 @@ git commit -m "feat: add voucher redemption with distributed lock + pessimistic 
 ## 태스크 10: Voucher 모듈 — 잔액 환불 ★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/application/VoucherRefundService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/event/VoucherRefundedEvent.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/application/VoucherRefundServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/application/VoucherRefundService.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/event/VoucherRefundedEvent.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/application/VoucherRefundServiceTest.kt`
 
 - [x] **Step 1: Write refund tests**
 
@@ -1952,9 +1952,9 @@ git commit -m "feat: add balance refund with 60% usage threshold and compensatin
 ## 태스크 10a: Voucher 모듈 — 청약철회 ★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/application/VoucherWithdrawalService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/event/VoucherWithdrawnEvent.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/application/VoucherWithdrawalServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/application/VoucherWithdrawalService.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/event/VoucherWithdrawnEvent.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/application/VoucherWithdrawalServiceTest.kt`
 
 - [x] **Step 1: Write withdrawal tests**
 
@@ -1980,9 +1980,9 @@ git commit -m "feat: add 7-day withdrawal (청약철회) with full refund"
 ## 태스크 11: 거래 취소 및 보상 트랜잭션 ★★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/application/TransactionCancelService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/transaction/domain/event/TransactionCancelledEvent.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/transaction/application/TransactionCancelServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/application/TransactionCancelService.kt`
+- Create: `src/main/kotlin/com/commerce/transaction/domain/event/TransactionCancelledEvent.kt`
+- Test: `src/test/kotlin/com/commerce/transaction/application/TransactionCancelServiceTest.kt`
 
 - [x] **Step 1: Write cancellation tests**
 
@@ -2015,9 +2015,9 @@ git commit -m "feat: add transaction cancellation with compensating transactions
 ## 태스크 12: 만료 처리 스케줄러 ★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/application/VoucherExpiryScheduler.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/voucher/domain/event/VoucherExpiredEvent.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/voucher/application/VoucherExpirySchedulerTest.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/application/VoucherExpiryScheduler.kt`
+- Create: `src/main/kotlin/com/commerce/voucher/domain/event/VoucherExpiredEvent.kt`
+- Test: `src/test/kotlin/com/commerce/voucher/application/VoucherExpirySchedulerTest.kt`
 
 - [x] **Step 1: Write expiry test**
 
@@ -2101,12 +2101,12 @@ git commit -m "feat: add voucher expiry scheduler with chunk processing and ledg
 ## 태스크 13: 정산 모듈 ★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/Settlement.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/SettlementStatus.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/domain/event/SettlementConfirmedEvent.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/application/SettlementService.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/merchant/infrastructure/SettlementJpaRepository.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/merchant/application/SettlementServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/Settlement.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/SettlementStatus.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/domain/event/SettlementConfirmedEvent.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/application/SettlementService.kt`
+- Create: `src/main/kotlin/com/commerce/merchant/infrastructure/SettlementJpaRepository.kt`
+- Test: `src/test/kotlin/com/commerce/merchant/application/SettlementServiceTest.kt`
 
 - [x] **Step 1: Write settlement calculation test**
 
@@ -2157,7 +2157,7 @@ class Settlement(
 
 SettlementService: calculate settlement based on completed transactions minus cancelled transactions in the period. Include `dispute()` and `resolveDispute()` methods.
 
-SettlementController (`src/main/kotlin/com/komsco/voucher/merchant/interfaces/SettlementController.kt`):
+SettlementController (`src/main/kotlin/com/commerce/merchant/interfaces/SettlementController.kt`):
 - `POST /api/v1/settlements/calculate` — 정산 배치 실행
 - `POST /api/v1/settlements/{id}/confirm` — 정산 확정
 - `POST /api/v1/settlements/{id}/dispute` — 이의 제기 (reason 필수)
@@ -2177,8 +2177,8 @@ git commit -m "feat: add Settlement module with period-based calculation and ded
 ## 태스크 14: 원장 정합성 검증 배치 ★★
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/application/LedgerVerificationService.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/ledger/application/LedgerVerificationServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/application/LedgerVerificationService.kt`
+- Test: `src/test/kotlin/com/commerce/ledger/application/LedgerVerificationServiceTest.kt`
 
 - [x] **Step 1: Write verification test — balanced ledger passes**
 
@@ -2276,8 +2276,8 @@ git commit -m "feat: add ledger verification batch with global + per-voucher bal
 ## 태스크 15: 통합 테스트 — 동시성 및 E2E ★
 
 **Files:**
-- Create: `src/test/kotlin/com/komsco/voucher/integration/ConcurrencyTest.kt`
-- Create: `src/test/kotlin/com/komsco/voucher/integration/E2EFlowTest.kt`
+- Create: `src/test/kotlin/com/commerce/integration/ConcurrencyTest.kt`
+- Create: `src/test/kotlin/com/commerce/integration/E2EFlowTest.kt`
 
 - [x] **Step 1: Write concurrent redemption test**
 
@@ -2342,7 +2342,7 @@ fun `expiry scheduler and redemption should not conflict`() {
 
 - [x] **Step 5: Run all integration tests**
 
-Run: `./gradlew test --tests "com.komsco.voucher.integration.*"`
+Run: `./gradlew test --tests "com.commerce.integration.*"`
 Expected: ALL PASS
 
 - [x] **Step 6: Commit**
@@ -2358,7 +2358,7 @@ git commit -m "test: add concurrency, idempotency, and E2E integration tests"
 
 **Files:**
 - Modify: `build.gradle.kts` (add springdoc-openapi dependency)
-- Create: `src/main/kotlin/com/komsco/voucher/config/SwaggerConfig.kt`
+- Create: `src/main/kotlin/com/commerce/config/SwaggerConfig.kt`
 - Create: `README.md`
 
 - [x] **Step 1: Add Swagger/OpenAPI dependency**
@@ -2442,9 +2442,9 @@ class FailedEventRetryScheduler(
 **Task 14a: Manual Adjustment API**
 
 **Files:**
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/interfaces/LedgerAdjustmentController.kt`
-- Create: `src/main/kotlin/com/komsco/voucher/ledger/application/LedgerAdjustmentService.kt`
-- Test: `src/test/kotlin/com/komsco/voucher/ledger/application/LedgerAdjustmentServiceTest.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/interfaces/LedgerAdjustmentController.kt`
+- Create: `src/main/kotlin/com/commerce/ledger/application/LedgerAdjustmentService.kt`
+- Test: `src/test/kotlin/com/commerce/ledger/application/LedgerAdjustmentServiceTest.kt`
 
 - [x] **Step 1: Write test — admin can create manual adjustment with reason**
 

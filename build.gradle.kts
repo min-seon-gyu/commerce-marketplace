@@ -9,7 +9,7 @@ plugins {
     kotlin("kapt") version "1.9.23"
 }
 
-group = "com.komsco"
+group = "com.commerce"
 version = "0.0.1-SNAPSHOT"
 
 java {

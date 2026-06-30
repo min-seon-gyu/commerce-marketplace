@@ -1,12 +1,12 @@
 spring:
   datasource:
-    url: jdbc:mysql://localhost:3307/voucher?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
-    username: root
-    password: root
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:voucher}?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Seoul
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: update
+      ddl-auto: validate
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
@@ -14,10 +14,14 @@ spring:
     open-in-view: false
   data:
     redis:
-      host: localhost
-      port: 6380
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
   flyway:
-    enabled: false
+    enabled: true
+    baseline-on-migrate: true
+
+point:
+  earn-rate: "0.01"
 
 server:
   port: 8080
@@ -31,3 +35,30 @@ management:
     web:
       exposure:
         include: health,metrics,prometheus
+  metrics:
+    tags:
+      application: voucher-platform
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        lock.acquisition.duration: true
+        voucher.redemption.duration: true
+      slo:
+        http.server.requests: 10ms,50ms,100ms,200ms,500ms,1s,2s
+
+ai:
+  promotion:
+    enabled: ${AI_PROMOTION_ENABLED:false}
+    api-key: ${ANTHROPIC_API_KEY:}
+    base-url: https://api.anthropic.com
+    model: claude-haiku-4-5
+    anthropic-version: "2023-06-01"
+    max-tokens: 1024
+    connect-timeout-ms: 2000
+    read-timeout-ms: 20000
+    max-retries: 2
+    backoff-base-ms: 200
+    circuit-failure-threshold: 5
+    circuit-open-ms: 30000
+    allowed-regions: SN,SU,GN
+    max-budget: 100000000
