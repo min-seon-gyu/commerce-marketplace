@@ -1,6 +1,6 @@
 # AI 프로모션 어시스턴트 — 설계 노트
 
-> 인터뷰 아티팩트: "AI 활용 역량" 세션용. 실제 구현(Plan 4 Tasks 1-5)을 기반으로 작성했으며,
+> 설계 노트: 운영자 자연어 요청 → 구조화 프로모션 초안 생성 기능의 설계·운영 가드 정리.
 > 각 섹션은 코드베이스의 실제 클래스/파일을 참조한다.
 
 ---
@@ -12,7 +12,7 @@
 사람이 검토·확정한다. **AI는 제안만 하며 DB에 직접 쓰지 않는다.**
 
 - 초안 엔드포인트: `POST /api/v1/promotions/draft` (멱등) → `PromotionDraftResponse` (초안 + 검증 리포트)
-- 확정: 사람이 검토 후 `POST /api/v1/promotions` (기존 Plan 2 엔드포인트) 로 영속화
+- 확정: 사람이 검토 후 `POST /api/v1/promotions` (기존 프로모션 생성 엔드포인트) 로 영속화
 
 ---
 
@@ -237,7 +237,7 @@ ai:
 
 ---
 
-## 12. 인터뷰 포인트 요약
+## 12. 핵심 설계 요약
 
 | 주제 | 구현 |
 |---|---|
@@ -250,7 +250,7 @@ ai:
 
 ---
 
-## 13. Plan 4 최종 검증 결과
+## 13. 최종 검증 결과
 
 전체 테스트 스위트 (`./gradlew test`) 실행 결과:
 
@@ -258,7 +258,7 @@ ai:
 BUILD SUCCESSFUL — 0 failures
 ```
 
-Plan 4 (Tasks 1-5) 구현 클래스 목록 (모두 빌드 및 테스트 통과):
+AI 어시스턴트 구현 클래스 목록 (모두 빌드 및 테스트 통과):
 
 - `LlmClient` — 인터페이스
 - `ClaudeLlmClient` — Claude Messages API 호출 (RestClient, structured output, 재시도, 서킷브레이커, 메트릭)
