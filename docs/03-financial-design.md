@@ -4,7 +4,7 @@
 > 복식부기 원장, 계정과목, 연산별 분개, 보상 트랜잭션, 정합성 검증을 다룬다.
 > 모든 분개는 `com.commerce.ledger / .promotion / .point / .transaction` 실제 코드에 대조해 검증했다.
 >
-> 연관 문서: [01-domain-design.md](01-domain-design.md) · [02-architecture-decisions.md](02-architecture-decisions.md) · [04-ai-promotion-assistant.md](04-ai-promotion-assistant.md)
+> 연관 문서: [01-domain-design.md](01-domain-design.md) · [02-architecture-decisions.md](02-architecture-decisions.md)
 
 **핵심 설계 결정 요약**
 
