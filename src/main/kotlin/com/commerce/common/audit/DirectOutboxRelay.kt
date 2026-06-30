@@ -1,6 +1,7 @@
 package com.commerce.common.audit
 
 import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.scheduling.annotation.Scheduled
 import org.springframework.stereotype.Component
@@ -8,12 +9,16 @@ import org.springframework.stereotype.Component
 /**
  * 직접 전달 relay (킬스위치 OFF/기본 또는 테스트). Kafka 없이 outbox → 감사 로그를 직접 적용한다.
  * `audit.kafka.enabled=false`(미설정 포함)일 때 활성화된다.
+ *
+ * poison 가드: 적용이 영구 실패하는 행은 attempts를 증가시키고 max 초과 시 격리(published로 마킹)한다.
+ * 이로써 무한 재처리와, id 오름차순 폴링에서 실패 행이 신규 이벤트를 starvation시키는 head-of-line 블로킹을 막는다.
  */
 @Component
 @ConditionalOnProperty(prefix = "audit.kafka", name = ["enabled"], havingValue = "false", matchIfMissing = true)
 class DirectOutboxRelay(
     private val outboxRepository: OutboxEventRepository,
     private val applier: OutboxAuditApplier,
+    @Value("\${audit.outbox.max-attempts:5}") private val maxAttempts: Int,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -22,17 +27,23 @@ class DirectOutboxRelay(
         relayOnce()
     }
 
-    /** 미발행 outbox 이벤트를 감사 로그로 적용하고 발행 마킹. 적용 성공 건수 반환(테스트에서 수동 호출). */
+    /** 미발행·미격리 outbox 이벤트를 감사 로그로 적용하고 발행 마킹. 적용 성공 건수 반환(테스트에서 수동 호출). */
     fun relayOnce(): Int {
         var applied = 0
-        outboxRepository.findTop200ByPublishedFalseOrderByIdAsc().forEach { event ->
+        outboxRepository.findTop200ByPublishedFalseAndAttemptsLessThanOrderByIdAsc(maxAttempts).forEach { event ->
             try {
                 applier.apply(event.payload)
                 applier.markPublished(event.id)
                 applied++
             } catch (e: Exception) {
-                // 미마킹으로 남겨 다음 폴링에서 재시도(apply는 멱등). 영구 실패는 운영 모니터링 대상.
-                log.warn("Direct outbox relay failed for event {} ({}): {}", event.id, event.eventType, e.message)
+                val attempts = applier.recordFailure(event.id)
+                if (attempts >= maxAttempts) {
+                    // 최대 시도 초과 → 격리: published로 마킹해 재처리/head-of-line 블로킹을 끊는다(운영 모니터링 대상).
+                    applier.markPublished(event.id)
+                    log.error("Direct relay quarantined outbox {} ({}) after {} attempts: {}", event.id, event.eventType, attempts, e.message)
+                } else {
+                    log.warn("Direct relay apply failed for outbox {} ({}), attempt {}: {}", event.id, event.eventType, attempts, e.message)
+                }
             }
         }
         return applied

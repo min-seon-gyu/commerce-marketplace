@@ -29,4 +29,9 @@ class OutboxAuditApplier(
     fun markPublished(outboxId: Long) {
         outboxRepository.findById(outboxId).ifPresent { it.markPublished() }
     }
+
+    /** 전달/적용 실패를 1회 기록하고 누적 시도 횟수를 반환한다(격리 판단용). 행이 없으면 MAX(즉시 격리 취급). */
+    @Transactional
+    fun recordFailure(outboxId: Long): Int =
+        outboxRepository.findById(outboxId).map { it.recordFailure() }.orElse(Int.MAX_VALUE)
 }

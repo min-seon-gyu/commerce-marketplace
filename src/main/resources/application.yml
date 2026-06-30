@@ -72,3 +72,6 @@ audit:
     group: audit-log-writers
   outbox:
     poll-ms: 1000
+    max-attempts: 5             # 전달/적용 실패 격리(quarantine) 임계
+    reconcile-ms: 300000        # published-but-not-applied 재조정 주기(5분)
+    reconcile-grace-ms: 600000  # 재조정 유예 — 최근 10분 내 행은 컨슈머 처리 중일 수 있어 제외
