@@ -107,9 +107,23 @@ WITHDRAWAL_REQUESTED → ACTIVE (청약철회 거절, 원상복귀)
 
 - 한 번 기록되면 수정/삭제 불가 (Immutable)
 - 필드: `accountCode`(AccountCode), `side`(LedgerEntrySide: DEBIT/CREDIT), `amount`, `transactionId`, `entryType`(LedgerEntryType), `createdAt`
-- entryType: `PURCHASE`, `REDEMPTION`, `REFUND`, `WITHDRAWAL`, `EXPIRY`, `SETTLEMENT`, `CANCELLATION`, `MANUAL_ADJUSTMENT`
-- accountCode: `MEMBER_CASH`(회원 현금), `VOUCHER_BALANCE`(상품권 잔액), `MERCHANT_RECEIVABLE`(가맹점 미수금), `REVENUE_DISCOUNT`(할인 수익), `EXPIRED_VOUCHER`(만료 상품권), `REFUND_PAYABLE`(환불 미지급금), `SETTLEMENT_PAYABLE`(정산 미지급금)
+- entryType: `PURCHASE`, `REDEMPTION`, `REFUND`, `WITHDRAWAL`, `EXPIRY`, `SETTLEMENT`, `CANCELLATION`, `MANUAL_ADJUSTMENT`, `COUPON_SUBSIDY`(쿠폰 보조 분개), `POINT_EARN`(포인트 적립 분개)
 - `MANUAL_ADJUSTMENT`: 관리자 승인 필수, 사유 필드(reason) 필수 입력, 생성 시 반드시 CRITICAL 감사 로그 동반
+
+**계정 코드 (AccountCode) 전체 목록** — 복식부기 상세 분개는 `03-financial-design.md` 참조.
+
+| 코드 | 설명 | 정상잔액 |
+|------|------|:-------:|
+| `MEMBER_CASH` | 회원 현금 (충전/환불 기준점) | 차변 |
+| `VOUCHER_BALANCE` | 상품권 잔액 (발행 부채) | 차변 |
+| `MERCHANT_RECEIVABLE` | 가맹점 미수금 (결제 후 정산 전) | 차변 |
+| `REVENUE_DISCOUNT` | 할인 수익 (지자체 보조 처리) | 대변 |
+| `EXPIRED_VOUCHER` | 만료 상품권 귀속 수익 | 대변 |
+| `REFUND_PAYABLE` | 환불 미지급금 | 대변 |
+| `SETTLEMENT_PAYABLE` | 정산 미지급금 (가맹점 지급 전) | 대변 |
+| `PROMOTION_FUNDING` | 프로모션 출연금 (쿠폰 보조 누적) | 대변 |
+| `POINT_BALANCE` | 포인트 잔액 (회원 적립 자산) | 차변 |
+| `POINT_FUNDING` | 포인트 출연금 (적립 비용 누적) | 대변 |
 
 ### 1.7 Transaction (거래)
 
@@ -146,6 +160,57 @@ DISPUTED ──→ CONFIRMED (이의 해결)
 - 기간 경계: 역월 기준 (예: 3/1 00:00 KST ~ 3/31 23:59:59 KST)
 - 타임존: KST (Asia/Seoul) 고정 — 국내 전용 시스템
 
+### 1.9 Promotion / Coupon 도메인
+
+**Promotion (프로모션)**
+
+```
+상태: DRAFT → ACTIVE → PAUSED
+                     → ENDED
+```
+
+- 필드: `name`, `discountType`(FIXED 정액/PERCENTAGE 정률), `discountValue`, `minSpend`(최소 결제금액), `perMemberLimit`(회원당 사용 한도), `budgetLimit`(예산 한도), `startsAt`, `endsAt`, `stackable`(현재 false 고정 — 단일 쿠폰 정책)
+- 할인액 산정: FIXED → `discountValue`; PERCENTAGE → `orderTotal × rate / 100` (원단위 내림, 과할인 방지). 과할인 클램프 `D = min(D, T)`는 오케스트레이터(RedemptionOrchestrator)가 적용
+- 예산: Redis 원자 예약(reserve) → DB 커밋 실패 시 보상 반환(release)으로 예산 누수 방지
+
+**Coupon (쿠폰)**
+
+```
+상태: ISSUED → REDEEMED (결제 완료)
+      ISSUED → EXPIRED  (유효기간 만료)
+      REDEEMED → CANCELLED (결제 취소로 회수)
+```
+
+- 회원(memberId) + 프로모션(promotionId) 조합으로 발급. `expiresAt = promotion.endsAt` (발급 시 복사)
+- ISSUED 상태에서만 REDEEMED 전환 가능 — 단일 사용 보장 (I12)
+- RESERVED 상태는 STRETCH 비동기 예약 흐름 전용; 현재 구현(MUST)에서는 ISSUED → REDEEMED 직행
+
+**CouponRedemption (조정 레코드)**
+
+- 쿠폰 결제 건마다 생성되는 불변 조정 레코드 (취소 시 `cancelled=true`로 soft-flag)
+- 필드: `orderTotal`(T, 주문 총액), `discountAmount`(D), `voucherCharged`(T−D, 실 바우처 차감액), `transactionId`, `cancelled`
+- 결합 결제 분개: 바우처분 `DEBIT MERCHANT_RECEIVABLE / CREDIT VOUCHER_BALANCE`(T−D) + 보조분 `DEBIT MERCHANT_RECEIVABLE / CREDIT PROMOTION_FUNDING`(D). 금액이 0인 leg는 생략
+
+### 1.10 Point 도메인
+
+**PointAccount (포인트 계좌)**
+
+- 회원 1인당 1계좌 (`memberId` UNIQUE). `balance`(차변정상, 음수 불가)
+- 동시 적립 요청은 `SELECT FOR UPDATE`로 직렬화 (INSERT IGNORE로 갭 락 데드락 회피 후 잠금)
+
+**PointTransaction (포인트 거래)**
+
+- `@Immutable` — 생성 후 수정/삭제 불가 (원 EARN 행 보존 원칙)
+- 타입: `EARN`(적립), `CANCEL`(보상 취소 — 원 EARN 행은 그대로 두고 별도 CANCEL 행 추가)
+- 필드: `memberId`, `type`, `amount`, `balanceAfter`, `sourceTransactionId`(원 redemption txId), `createdAt`
+
+**적립 규칙**
+
+- 적립 시점: 결제(REDEMPTION) 완료와 **동일 DB 트랜잭션** 내 동기 기록
+- 적립 기준액: 실제 바우처 차감액 `voucherCharged`(T−D) — 쿠폰 보조분 D는 플랫폼 출연이므로 제외 (I17)
+- 적립률: `point.earn-rate`(설정값, 기본 1%). 적립액 = `voucherCharged × rate` (HALF_UP, 1원 단위)
+- 취소 시 역적립: 취소 트랜잭션 내 동기 역분개 (`DEBIT POINT_FUNDING / CREDIT POINT_BALANCE`)
+
 ---
 
 ## 2. 불변식 (절대 위반 불가)
@@ -163,6 +228,12 @@ DISPUTED ──→ CONFIRMED (이의 해결)
 | I9 | 1인 구매한도 초과 구매 불가 | Yes | 동시 구매 요청 시 한도 초과 가능 |
 | I10 | 정산 금액 = 해당 기간 가맹점 사용 내역 합산 | No | 배치에서 계산, 원장 기반 검증 |
 | I11 | `MANUAL_ADJUSTMENT` 원장 엔트리는 관리자 승인 + 사유 필수 | No | 서비스 계층 검증 |
+| I12 | 쿠폰 단일 사용 — ISSUED 상태에서만 REDEEMED 전환 가능, 재사용 불가 | Yes | 동시 결제 요청 시 쿠폰 락으로 직렬화 |
+| I13 | 할인액 `D ≤ T` — 주문총액 초과 할인 불가 (클램프 `min(D, T)`) | No | 오케스트레이터 적용 |
+| I14 | 프로모션 예산 초과 지급 불가 (`budgetLimit` 원자 예약) | Yes | 동시 결제 시 Redis 원자 연산으로 직렬화 |
+| I15 | `PointAccount.balance ≥ 0` — 포인트 잔액 음수 불가 | Yes | 동시 취소 요청 시 경쟁 상태 |
+| I16 | `Σ PointAccount.balance == 원장 POINT_BALANCE 순액` — I3의 포인트 버전 | No | 배치 검증, 동일 트랜잭션 내 동기 갱신으로 예방 |
+| I17 | 포인트 적립 기준액 = `voucherCharged`(T−D) — 쿠폰 보조분 D는 적립 제외 | No | 서비스 계층 고정 |
 
 ---
 
@@ -179,6 +250,8 @@ DISPUTED ──→ CONFIRMED (이의 해결)
 | **잔액 환불 조건 미충족** | 60% 미만 사용 상태에서 환불 시도 | `(faceValue - balance) / faceValue < 0.6` 이면 거절 |
 | **청약철회 기간 초과** | 구매 후 8일째 청약철회 시도 | `purchasedAt + 7일 < now` 이면 거절 |
 | **정산 중 취소** | 정산 확정 후 해당 기간 거래 취소 요청 | 이미 정산된 거래는 다음 정산 주기에서 차감 처리 (보상 트랜잭션) |
+| **예산 소진 후 쿠폰 결제** | Redis 예약 성공 후 DB 커밋 실패 | `finally` 블록에서 보상 DECRBY로 예산 반환 (누수 방지) |
+| **쿠폰 취소 후 포인트 역적립** | 결제 취소 시 포인트 이미 적립된 상태 | 원 EARN 행 불변 보존 + 새 CANCEL 행 + 역분개로 보상 |
 
 ---
 
@@ -191,6 +264,8 @@ DISPUTED ──→ CONFIRMED (이의 해결)
 | 구매한도 검증 | **강한 일관성** | 한도 초과 시 정책 위반 |
 | 월 발행한도 | **강한 일관성** | 지자체 예산 초과 방지 |
 | CRITICAL 감사 로그 | **강한 일관성** | 금전 변동 감사 실패 시 트랜잭션 롤백 |
+| 포인트 적립/역적립 | **강한 일관성** | 결제 트랜잭션과 동일 DB 트랜잭션 내 동기 기록 |
+| 프로모션 예산 예약 | **강한 일관성** | Redis 원자 연산 (DB 트랜잭션 밖, 보상 패턴 병행) |
 | HIGH/MEDIUM 감사 로그 | **최종 일관성** | 비동기 이벤트 리스너로 기록. 실패 시 재시도 |
 | 정산 금액 계산 | **최종 일관성** | 배치로 계산. 즉시성 불요 |
 | 알림 발송 | **최종 일관성** | 이벤트 기반 비동기 처리 |
@@ -207,4 +282,4 @@ DISPUTED ──→ CONFIRMED (이의 해결)
 
 ---
 
-**1단계 핵심 결정:** Voucher는 ACTIVE 직접 생성, 청약철회(7일)와 잔액환불(60%)을 별개 프로세스로 분리, 원장 기록은 동일 트랜잭션 내 동기 호출, MANUAL_ADJUSTMENT는 관리자 승인 필수, 데이터 5년 보관. BigDecimal 비교는 `compareTo`로 통일하여 scale 차이에 의한 비교 오류 방지 (예: `0.00 != 0` 문제).
+**핵심 결정 요약:** Voucher는 ACTIVE 직접 생성, 청약철회(7일)와 잔액환불(60%)은 별개 프로세스로 분리, 원장 기록은 동일 트랜잭션 내 동기 호출, MANUAL_ADJUSTMENT는 관리자 승인 필수, 데이터 5년 보관. 쿠폰 결합 결제는 정준 락 순서(coupon → voucher)로 데드락 방지, 예산은 Redis 원자 예약 + 보상 패턴으로 누수 방지. 포인트 적립은 바우처 실차감액(T−D) 기준 1%, 취소 시 원 EARN 행 보존 + 역분개 보상. BigDecimal 비교는 `compareTo`로 통일하여 scale 차이에 의한 비교 오류 방지.
