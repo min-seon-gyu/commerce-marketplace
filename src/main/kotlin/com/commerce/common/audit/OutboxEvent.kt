@@ -38,6 +38,9 @@ class OutboxEvent(
     @Column(nullable = false)
     var published: Boolean = false,
 
+    @Column(nullable = false)
+    var attempts: Int = 0,
+
     @Column(nullable = false, columnDefinition = "DATETIME(6)")
     val createdAt: LocalDateTime = LocalDateTime.now(),
 
@@ -51,5 +54,11 @@ class OutboxEvent(
     fun markPublished(at: LocalDateTime = LocalDateTime.now()) {
         published = true
         publishedAt = at
+    }
+
+    /** 전달/적용 실패 1회 기록. 반환값은 누적 시도 횟수(격리 판단용). */
+    fun recordFailure(): Int {
+        attempts += 1
+        return attempts
     }
 }

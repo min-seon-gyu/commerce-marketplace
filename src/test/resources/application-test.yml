@@ -12,5 +12,13 @@ spring:
 audit:
   kafka:
     enabled: false          # 테스트 기본: 브로커 없이 DirectOutboxRelay 사용
+    retry:                  # EmbeddedKafka 테스트: 빠르게 재시도 소진 후 DLT(20s await 내)
+      initial-ms: 100
+      multiplier: 2.0
+      max-interval-ms: 300
+      max-elapsed-ms: 800
   outbox:
     poll-ms: 600000         # 백그라운드 폴링 사실상 비활성 → 테스트는 relayOnce()를 수동 호출
+    max-attempts: 3         # 테스트에서 격리 임계 낮춤
+    reconcile-ms: 600000    # 백그라운드 재조정 사실상 비활성 → 테스트는 reconcileOnce()를 수동 호출
+    reconcile-grace-ms: 0   # 테스트: 방금 만든 행도 즉시 재조정 대상

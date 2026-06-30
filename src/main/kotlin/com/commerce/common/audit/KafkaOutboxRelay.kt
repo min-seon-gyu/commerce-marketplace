@@ -29,14 +29,17 @@ class KafkaOutboxRelay(
     /** 미발행 outbox 이벤트를 Kafka로 발행하고 발행 마킹. 발행 성공 건수 반환(테스트에서 수동 호출). */
     fun relayOnce(): Int {
         var published = 0
-        outboxRepository.findTop200ByPublishedFalseOrderByIdAsc().forEach { event ->
+        for (event in outboxRepository.findTop200ByPublishedFalseOrderByIdAsc()) {
             try {
                 // 키=eventId(파티션 내 순서·중복 추적). 발행 확인(get) 후 마킹 → 미발행은 다음 폴링에서 재시도.
                 kafkaTemplate.send(topic, event.eventId, event.payload).get()
                 applier.markPublished(event.id)
                 published++
             } catch (e: Exception) {
-                log.warn("Kafka outbox relay failed for event {} ({}): {}", event.id, event.eventType, e.message)
+                // 전송 실패는 대개 브로커 미가용 → 배치를 중단한다(200건을 각각 fast-fail해 스케줄러 스레드를 장기 점유하지 않도록).
+                // 미발행 행은 다음 폴링에서 재시도된다(at-least-once).
+                log.warn("Kafka outbox relay stopped at outbox {} ({}): {}", event.id, event.eventType, e.message)
+                break
             }
         }
         return published
