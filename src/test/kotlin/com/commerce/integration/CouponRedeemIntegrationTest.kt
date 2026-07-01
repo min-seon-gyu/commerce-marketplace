@@ -38,16 +38,16 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -60,7 +60,7 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
         // 주문총액 T=10,000, 할인 D=3,000, 바우처 차감 T-D=7,000
-        val result = orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
 
         // 바우처 잔액 = 50,000 - 7,000 = 43,000
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("43000")) shouldBe 0
@@ -103,7 +103,7 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
         // 주문 2,000 < 정액 3,000 → D는 2,000으로 클램프, 바우처 차감 0
-        val result = orchestrator.redeem(voucher.id, merchantId, BigDecimal("2000"), coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, BigDecimal("2000"), coupon.id)
 
         val cr = couponRedemptionRepository.findByTransactionId(result.transactionId)!!
         cr.discountAmount.compareTo(BigDecimal("2000")) shouldBe 0
@@ -135,7 +135,7 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
         shouldThrow<BusinessException> {
-            orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+            orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
         }.errorCode shouldBe ErrorCode.MIN_SPEND_NOT_MET
 
         // 바우처/쿠폰 불변 + 정합성 유지
@@ -156,7 +156,7 @@ class CouponRedeemIntegrationTest : IntegrationTestSupport() {
 
         // 예산 예약은 DB tx 밖에서 성공하지만 tx 내에서 잔액 부족으로 롤백 → 보상 release 발동해야 함
         shouldThrow<BusinessException> {
-            orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+            orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
         }.errorCode shouldBe ErrorCode.INSUFFICIENT_BALANCE
 
         // 예산 누수 없음: consumed 가 0으로 복원

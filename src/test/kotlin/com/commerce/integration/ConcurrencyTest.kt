@@ -29,17 +29,17 @@ class ConcurrencyTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchantOwner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, merchantOwner)
+        val sellerOwner = fixtures.createMember()
+        val seller = fixtures.createSeller(region, sellerOwner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -59,7 +59,7 @@ class ConcurrencyTest : IntegrationTestSupport() {
                 latch.await()
                 try {
                     redemptionService.redeem(
-                        voucher.id, merchantId, BigDecimal("10000")
+                        voucher.id, sellerId, BigDecimal("10000")
                     )
                     successCount.incrementAndGet()
                 } catch (e: BusinessException) {
@@ -100,7 +100,7 @@ class ConcurrencyTest : IntegrationTestSupport() {
     fun `concurrent redemption and refund should not conflict`() {
         // given: 50,000원 상품권을 35,000원 사용 (usage 70% > 60%)
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("35000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("35000"))
 
         // 잔액 15,000원, usage 70%
         val latch = CountDownLatch(1)
@@ -111,7 +111,7 @@ class ConcurrencyTest : IntegrationTestSupport() {
         val f1 = executor.submit {
             latch.await()
             try {
-                redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+                redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
                 synchronized(results) { results.add("REDEEM_SUCCESS") }
             } catch (e: BusinessException) {
                 synchronized(results) { results.add("REDEEM_FAIL:${e.errorCode}") }
@@ -122,7 +122,7 @@ class ConcurrencyTest : IntegrationTestSupport() {
             try {
                 // RefundService를 직접 호출하면 순환참조 이슈가 있을 수 있으므로
                 // 여기서는 결제를 2건 동시에 시도하여 동시성 제어를 검증
-                redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+                redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
                 synchronized(results) { results.add("REDEEM2_SUCCESS") }
             } catch (e: BusinessException) {
                 synchronized(results) { results.add("REDEEM2_FAIL:${e.errorCode}") }

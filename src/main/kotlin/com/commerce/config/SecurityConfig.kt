@@ -41,8 +41,8 @@ class SecurityConfig(
                 ).hasRole("ADMIN")
                 it.requestMatchers(
                     HttpMethod.POST,
-                    "/api/v1/merchants/*/approve", "/api/v1/merchants/*/reject",
-                    "/api/v1/merchants/*/suspend", "/api/v1/merchants/*/unsuspend", "/api/v1/merchants/*/terminate",
+                    "/api/v1/sellers/*/approve", "/api/v1/sellers/*/reject",
+                    "/api/v1/sellers/*/suspend", "/api/v1/sellers/*/unsuspend", "/api/v1/sellers/*/terminate",
                 ).hasRole("ADMIN")
                 it.requestMatchers(
                     HttpMethod.POST,
@@ -53,8 +53,8 @@ class SecurityConfig(
 
                 // ── 인증 필요(역할 무관) ─────────────────────────────────────────────
                 it.requestMatchers("/api/v1/me").authenticated()
-                // 가맹점 등록: 인증 필수 + 컨트롤러에서 ownerId를 JWT 주체로 강제(본인 가맹점만).
-                it.requestMatchers(HttpMethod.POST, "/api/v1/merchants").authenticated()
+                // 판매자 등록: 인증 필수 + 컨트롤러에서 ownerId를 JWT 주체로 강제(본인 판매자만).
+                it.requestMatchers(HttpMethod.POST, "/api/v1/sellers").authenticated()
                 // 상품권 자금 이동 엔드포인트: 인증 필수 + 컨트롤러에서 JWT 주체로 소유권 검증.
                 it.requestMatchers(
                     HttpMethod.POST,
@@ -66,7 +66,7 @@ class SecurityConfig(
                     HttpMethod.GET, "/api/v1/vouchers", "/api/v1/vouchers/*",
                 ).authenticated()
 
-                // 그 외(가맹점 등록/조회, 회원 조회, 지자체 조회, 프로모션/포인트/쿠폰)는
+                // 그 외(판매자 등록/조회, 회원 조회, 지자체 조회, 프로모션/포인트/쿠폰)는
                 // 공개이거나 컨트롤러 레벨 SecurityUtils가 본인 자원 인가를 강제한다.
                 it.anyRequest().permitAll()
             }

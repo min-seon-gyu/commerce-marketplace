@@ -49,11 +49,11 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
         // atomically with the PointAccount update — keeping the global invariant intact.
         val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, owner)
+        val seller = fixtures.createSeller(region, owner)
         val member = fixtures.createMember()
         // Redeem full face value: 50000 * 1% earn-rate = 500 points
         val voucher = fixtures.issueVoucher(member.id, region.id, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchant.id, BigDecimal("50000"))
+        redemptionService.redeem(voucher.id, seller.id, BigDecimal("50000"))
 
         val token = jwtTokenProvider.generateToken(member.id, "USER")
 

@@ -44,23 +44,23 @@ class PointCancelIntegrationTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
     fun `plain redeem earns points then cancel reverses them and restores point balance`() {
         // 적립률 0.01: 30,000 결제 → 300 포인트 적립
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val result = redemptionService.redeem(voucher.id, merchantId, BigDecimal("30000"))
+        val result = redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
 
         // 적립 직후: balance 300
         pointAccountRepository.findByMemberId(memberId)!!.balance.compareTo(BigDecimal("300")) shouldBe 0
@@ -109,7 +109,7 @@ class PointCancelIntegrationTest : IntegrationTestSupport() {
         )
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
-        val result = orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
         pointAccountRepository.findByMemberId(memberId)!!.balance.compareTo(BigDecimal("70")) shouldBe 0
 
         val compensatingTxId = cancelService.cancel(result.transactionId)
@@ -152,7 +152,7 @@ class PointCancelIntegrationTest : IntegrationTestSupport() {
         )
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
-        val result = orchestrator.redeem(voucher.id, merchantId, orderTotal, coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, orderTotal, coupon.id)
         // 적립 0 → PointAccount 미생성(또는 0)
         (pointAccountRepository.findByMemberId(memberId)?.balance ?: BigDecimal.ZERO)
             .compareTo(BigDecimal.ZERO) shouldBe 0

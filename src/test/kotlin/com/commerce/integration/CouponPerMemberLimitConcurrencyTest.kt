@@ -30,14 +30,14 @@ class CouponPerMemberLimitConcurrencyTest : IntegrationTestSupport() {
     @Autowired lateinit var verificationService: LedgerVerificationService
 
     private var regionId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -62,7 +62,7 @@ class CouponPerMemberLimitConcurrencyTest : IntegrationTestSupport() {
             executor.submit {
                 latch.await()
                 try {
-                    orchestrator.redeem(voucherId, merchantId, BigDecimal("10000"), couponId)
+                    orchestrator.redeem(voucherId, sellerId, BigDecimal("10000"), couponId)
                     success.incrementAndGet()
                 } catch (e: BusinessException) {
                     if (e.errorCode == ErrorCode.COUPON_USAGE_LIMIT_EXCEEDED) limitExceeded.incrementAndGet()

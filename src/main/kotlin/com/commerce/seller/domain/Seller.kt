@@ -1,4 +1,4 @@
-package com.commerce.merchant.domain
+package com.commerce.seller.domain
 
 import com.commerce.common.domain.BaseEntity
 import com.commerce.common.exception.BusinessException
@@ -8,8 +8,8 @@ import com.commerce.region.domain.Region
 import jakarta.persistence.*
 
 @Entity
-@Table(name = "merchants")
-class Merchant(
+@Table(name = "sellers")
+class Seller(
     @Column(nullable = false, length = 100)
     val name: String,
 
@@ -18,7 +18,7 @@ class Merchant(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    val category: MerchantCategory,
+    val category: SellerCategory,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "region_id", nullable = false)
@@ -30,38 +30,38 @@ class Merchant(
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
-    var status: MerchantStatus = MerchantStatus.PENDING_APPROVAL,
+    var status: SellerStatus = SellerStatus.PENDING_APPROVAL,
 ) : BaseEntity() {
 
     fun approve() {
-        if (status != MerchantStatus.PENDING_APPROVAL)
+        if (status != SellerStatus.PENDING_APPROVAL)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION, "PENDING_APPROVAL 상태에서만 승인할 수 있습니다")
-        status = MerchantStatus.APPROVED
+        status = SellerStatus.APPROVED
     }
 
     fun reject() {
-        if (status != MerchantStatus.PENDING_APPROVAL)
+        if (status != SellerStatus.PENDING_APPROVAL)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION, "PENDING_APPROVAL 상태에서만 거절할 수 있습니다")
-        status = MerchantStatus.REJECTED
+        status = SellerStatus.REJECTED
     }
 
     fun suspend() {
-        if (status != MerchantStatus.APPROVED)
+        if (status != SellerStatus.APPROVED)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION, "APPROVED 상태에서만 정지할 수 있습니다")
-        status = MerchantStatus.SUSPENDED
+        status = SellerStatus.SUSPENDED
     }
 
     fun unsuspend() {
-        if (status != MerchantStatus.SUSPENDED)
+        if (status != SellerStatus.SUSPENDED)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION, "SUSPENDED 상태에서만 정지 해제할 수 있습니다")
-        status = MerchantStatus.APPROVED
+        status = SellerStatus.APPROVED
     }
 
     fun terminate() {
-        if (status != MerchantStatus.APPROVED && status != MerchantStatus.SUSPENDED)
+        if (status != SellerStatus.APPROVED && status != SellerStatus.SUSPENDED)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION, "APPROVED 또는 SUSPENDED 상태에서만 해지할 수 있습니다")
-        status = MerchantStatus.TERMINATED
+        status = SellerStatus.TERMINATED
     }
 
-    fun isApproved(): Boolean = status == MerchantStatus.APPROVED
+    fun isApproved(): Boolean = status == SellerStatus.APPROVED
 }

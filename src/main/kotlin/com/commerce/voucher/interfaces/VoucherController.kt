@@ -70,7 +70,7 @@ class VoucherController(
     fun redeem(@PathVariable id: Long, @Valid @RequestBody request: RedeemRequest): ApiResponse<RedemptionResult> {
         requireActiveMember(SecurityUtils.currentMemberId()) // 정지된 회원은 토큰이 유효해도 자금 이동 불가
         requireOwnership(id) // 결제 서비스는 소유권을 검증하지 않으므로 컨트롤러에서 강제(IDOR 차단)
-        return ApiResponse.ok(redemptionOrchestrator.redeem(id, request.merchantId, request.amount, request.couponId))
+        return ApiResponse.ok(redemptionOrchestrator.redeem(id, request.sellerId, request.amount, request.couponId))
     }
 
     @PostMapping("/{id}/refund")

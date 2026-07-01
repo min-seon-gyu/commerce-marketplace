@@ -75,16 +75,16 @@ class CouponIdempotencyTest {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -105,7 +105,7 @@ class CouponIdempotencyTest {
             set("Idempotency-Key", idempotencyKey)
             set("Authorization", "Bearer ${jwtTokenProvider.generateToken(memberId, "USER")}")
         }
-        val body = """{"merchantId": $merchantId, "amount": 10000, "couponId": ${coupon.id}}"""
+        val body = """{"sellerId": $sellerId, "amount": 10000, "couponId": ${coupon.id}}"""
         val request = HttpEntity(body, headers)
         val url = "/api/v1/vouchers/${voucher.id}/redeem"
 

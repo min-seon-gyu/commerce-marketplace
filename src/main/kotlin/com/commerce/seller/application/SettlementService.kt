@@ -1,14 +1,14 @@
-package com.commerce.merchant.application
+package com.commerce.seller.application
 
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntryType
-import com.commerce.merchant.domain.Settlement
-import com.commerce.merchant.domain.event.SettlementConfirmedEvent
-import com.commerce.merchant.infrastructure.MerchantJpaRepository
-import com.commerce.merchant.infrastructure.SettlementJpaRepository
+import com.commerce.seller.domain.Settlement
+import com.commerce.seller.domain.event.SettlementConfirmedEvent
+import com.commerce.seller.infrastructure.SellerJpaRepository
+import com.commerce.seller.infrastructure.SettlementJpaRepository
 import com.commerce.region.domain.SettlementPeriod
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionStatus
@@ -30,12 +30,12 @@ class SettlementService(
     private val transactionRepository: TransactionJpaRepository,
     private val transactionService: TransactionService,
     private val ledgerService: LedgerService,
-    private val merchantRepository: MerchantJpaRepository,
+    private val sellerRepository: SellerJpaRepository,
     private val eventPublisher: ApplicationEventPublisher,
 ) {
 
     /**
-     * 가맹점 소속 지자체의 정산 주기(일/주/월)에 맞춰 KST 역월 기준 정산 기간을 산출한 뒤 정산한다.
+     * 판매자 소속 지자체의 정산 주기(일/주/월)에 맞춰 KST 역월 기준 정산 기간을 산출한 뒤 정산한다.
      * 기준일(referenceDate)이 속한 주기 구간 [start, end]를 닫힌 구간으로 계산한다.
      *   - DAILY  : 기준일 당일
      *   - WEEKLY : 기준일이 속한 ISO 주(월~일)
@@ -43,37 +43,37 @@ class SettlementService(
      */
     @Transactional
     fun calculateForPeriod(
-        merchantId: Long,
+        sellerId: Long,
         referenceDate: LocalDate = LocalDate.now(KST),
     ): Settlement {
-        val merchant = merchantRepository.findById(merchantId)
+        val seller = sellerRepository.findById(sellerId)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
-        val (start, end) = resolvePeriod(merchant.region.policy.settlementPeriod, referenceDate)
-        return calculate(merchantId, start, end)
+        val (start, end) = resolvePeriod(seller.region.policy.settlementPeriod, referenceDate)
+        return calculate(sellerId, start, end)
     }
 
     /**
      * 결산 배치용: 기준일이 속한 정산 구간의 **미저장** Settlement를 만든다(중복 또는 0원이면 null=스킵).
-     * calculate()와 달리 예외를 던지지 않아 청크 처리에서 head-of-line 없이 다음 가맹점으로 진행한다.
-     * 자체 read-only tx 안에서 가맹점을 로드하므로 region(LAZY) 접근이 안전하다(reader가 넘긴 detached 엔티티 미사용).
+     * calculate()와 달리 예외를 던지지 않아 청크 처리에서 head-of-line 없이 다음 판매자으로 진행한다.
+     * 자체 read-only tx 안에서 판매자을 로드하므로 region(LAZY) 접근이 안전하다(reader가 넘긴 detached 엔티티 미사용).
      */
     @Transactional(readOnly = true)
-    fun buildSettlementForBatch(merchantId: Long, referenceDate: LocalDate): Settlement? {
-        val merchant = merchantRepository.findById(merchantId).orElse(null) ?: return null
-        val (start, end) = resolvePeriod(merchant.region.policy.settlementPeriod, referenceDate)
+    fun buildSettlementForBatch(sellerId: Long, referenceDate: LocalDate): Settlement? {
+        val seller = sellerRepository.findById(sellerId).orElse(null) ?: return null
+        val (start, end) = resolvePeriod(seller.region.policy.settlementPeriod, referenceDate)
 
         // 재실행 안전: 같은 구간 정산이 이미 있으면 스킵(unique 제약과 이중 방어).
-        if (settlementRepository.findByMerchantIdAndPeriodStartAndPeriodEnd(merchantId, start, end) != null) return null
+        if (settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, start, end) != null) return null
 
-        val totalAmount = transactionRepository.sumAmountByMerchantAndTypeAndPeriod(
-            merchantId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED,
+        val totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
+            sellerId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED,
             start.atStartOfDay(), end.atTime(LocalTime.MAX),
         )
         // 0원 정산은 만들지 않는다(노이즈 방지 + confirm 단계의 0원 고착 문제와 일관).
         if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) return null
 
         return Settlement(
-            merchantId = merchantId,
+            sellerId = sellerId,
             periodStart = start,
             periodEnd = end,
             totalAmount = totalAmount,
@@ -87,22 +87,22 @@ class SettlementService(
     }
 
     @Transactional
-    fun calculate(merchantId: Long, periodStart: LocalDate, periodEnd: LocalDate): Settlement {
+    fun calculate(sellerId: Long, periodStart: LocalDate, periodEnd: LocalDate): Settlement {
         // Check duplicate
-        settlementRepository.findByMerchantIdAndPeriodStartAndPeriodEnd(merchantId, periodStart, periodEnd)
+        settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, periodStart, periodEnd)
             ?.let { throw BusinessException(ErrorCode.INVALID_INPUT, "이미 해당 기간 정산이 존재합니다") }
 
         val start = periodStart.atStartOfDay()
         val end = periodEnd.atTime(LocalTime.MAX)
 
         // COMPLETED 상태인 결제만 합산 (취소된 원 거래는 CANCELLED 상태이므로 자동 제외)
-        val totalAmount = transactionRepository.sumAmountByMerchantAndTypeAndPeriod(
-            merchantId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED, start, end
+        val totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
+            sellerId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED, start, end
         )
 
         return settlementRepository.save(
             Settlement(
-                merchantId = merchantId,
+                sellerId = sellerId,
                 periodStart = periodStart,
                 periodEnd = periodEnd,
                 totalAmount = totalAmount,
@@ -117,9 +117,9 @@ class SettlementService(
 
         // 확정 시점에 totalAmount를 재계산한다(스냅샷 신뢰 금지).
         // calculate 이후·confirm 이전에 취소된 결제는 CANCELLED가 되어 합산에서 제외되므로,
-        // 취소된 결제분을 가맹점에 지급(과지급)하고 MERCHANT_RECEIVABLE을 음수로 만드는 결함을 막는다.
-        settlement.totalAmount = transactionRepository.sumAmountByMerchantAndTypeAndPeriod(
-            settlement.merchantId,
+        // 취소된 결제분을 판매자에 지급(과지급)하고 MERCHANT_RECEIVABLE을 음수로 만드는 결함을 막는다.
+        settlement.totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
+            settlement.sellerId,
             TransactionType.REDEMPTION,
             TransactionStatus.COMPLETED,
             settlement.periodStart.atStartOfDay(),
@@ -129,11 +129,11 @@ class SettlementService(
         // 0원 정산(해당 기간 결제 없음/전부 취소)은 원장 분개를 만들지 않는다 — Transaction은 양수 금액만 허용하므로
         // 0원 거래 생성은 예외가 되어 정산이 PENDING에 영구 고착된다.
         if (settlement.totalAmount.compareTo(BigDecimal.ZERO) > 0) {
-            // 정산 확정 시 원장 기록: 가맹점 미수금 → 정산 미지급금
+            // 정산 확정 시 원장 기록: 판매자 미수금 → 정산 미지급금
             val tx = transactionService.create(
                 type = TransactionType.SETTLEMENT,
                 amount = settlement.totalAmount,
-                merchantId = settlement.merchantId,
+                sellerId = settlement.sellerId,
             )
             ledgerService.record(
                 debitAccount = AccountCode.SETTLEMENT_PAYABLE,
@@ -148,7 +148,7 @@ class SettlementService(
         eventPublisher.publishEvent(
             SettlementConfirmedEvent(
                 aggregateId = settlement.id,
-                merchantId = settlement.merchantId,
+                sellerId = settlement.sellerId,
                 totalAmount = settlement.totalAmount,
                 periodStart = settlement.periodStart,
                 periodEnd = settlement.periodEnd,

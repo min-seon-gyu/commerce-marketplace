@@ -5,8 +5,8 @@ import com.commerce.common.audit.AuditLogRepository
 import com.commerce.common.audit.AuditSeverity
 import com.commerce.common.audit.DirectOutboxRelay
 import com.commerce.member.application.MemberService
-import com.commerce.merchant.application.MerchantService
-import com.commerce.merchant.application.RegisterMerchantRequest
+import com.commerce.seller.application.SellerService
+import com.commerce.seller.application.RegisterSellerRequest
 import com.commerce.region.application.RegionService
 import com.commerce.region.interfaces.dto.CreateRegionRequest
 import com.commerce.support.IntegrationTestSupport
@@ -25,7 +25,7 @@ import java.math.BigDecimal
 class AuditEventEmissionTest : IntegrationTestSupport() {
 
     @Autowired lateinit var fixtures: TestFixtures
-    @Autowired lateinit var merchantService: MerchantService
+    @Autowired lateinit var sellerService: SellerService
     @Autowired lateinit var memberService: MemberService
     @Autowired lateinit var regionService: RegionService
     @Autowired lateinit var auditLogRepository: AuditLogRepository
@@ -39,11 +39,11 @@ class AuditEventEmissionTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `merchant rejection emits HIGH audit log`() {
+    fun `seller rejection emits HIGH audit log`() {
         val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val merchant = merchantService.register(
-            RegisterMerchantRequest(
+        val seller = sellerService.register(
+            RegisterSellerRequest(
                 name = "거절가게",
                 businessNumber = "111-11-11111",
                 category = "RESTAURANT",
@@ -52,21 +52,21 @@ class AuditEventEmissionTest : IntegrationTestSupport() {
             )
         )
 
-        merchantService.reject(merchant.id)
+        sellerService.reject(seller.id)
 
-        val audit = auditOf("MERCHANT", merchant.id, "MERCHANT_REJECTED")
+        val audit = auditOf("SELLER", seller.id, "SELLER_REJECTED")
         audit.shouldNotBeNull()
         audit.severity shouldBe AuditSeverity.HIGH
     }
 
     @Test
-    fun `merchant termination emits HIGH audit log`() {
+    fun `seller termination emits HIGH audit log`() {
         val region = fixtures.createRegion()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember()) // APPROVED
+        val seller = fixtures.createSeller(region, fixtures.createMember()) // APPROVED
 
-        merchantService.terminate(merchant.id)
+        sellerService.terminate(seller.id)
 
-        val audit = auditOf("MERCHANT", merchant.id, "MERCHANT_TERMINATED")
+        val audit = auditOf("SELLER", seller.id, "SELLER_TERMINATED")
         audit.shouldNotBeNull()
         audit.severity shouldBe AuditSeverity.HIGH
     }

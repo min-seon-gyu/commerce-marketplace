@@ -1,4 +1,4 @@
-package com.commerce.merchant.domain
+package com.commerce.seller.domain
 
 import com.commerce.common.exception.BusinessException
 import io.kotest.assertions.throwables.shouldThrow
@@ -10,7 +10,7 @@ import java.time.LocalDate
 class SettlementTest {
 
     private fun newSettlement() = Settlement(
-        merchantId = 1L,
+        sellerId = 1L,
         periodStart = LocalDate.of(2026, 1, 1),
         periodEnd = LocalDate.of(2026, 1, 31),
         totalAmount = BigDecimal("10000"),

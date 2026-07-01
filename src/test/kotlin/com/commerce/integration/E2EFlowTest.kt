@@ -8,7 +8,7 @@ import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.ledger.domain.LedgerEntrySide
 import com.commerce.ledger.infrastructure.LedgerJpaRepository
-import com.commerce.merchant.application.SettlementService
+import com.commerce.seller.application.SettlementService
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.application.TransactionCancelService
@@ -44,17 +44,17 @@ class E2EFlowTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchantOwner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, merchantOwner)
+        val sellerOwner = fixtures.createMember()
+        val seller = fixtures.createSeller(region, sellerOwner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -65,11 +65,11 @@ class E2EFlowTest : IntegrationTestSupport() {
         voucher.balance.compareTo(BigDecimal("50000")) shouldBe 0
 
         // 2. 1차 결제: 20,000원
-        val r1 = redemptionService.redeem(voucher.id, merchantId, BigDecimal("20000"))
+        val r1 = redemptionService.redeem(voucher.id, sellerId, BigDecimal("20000"))
         r1.remainingBalance.compareTo(BigDecimal("30000")) shouldBe 0
 
         // 3. 2차 결제: 15,000원
-        val r2 = redemptionService.redeem(voucher.id, merchantId, BigDecimal("15000"))
+        val r2 = redemptionService.redeem(voucher.id, sellerId, BigDecimal("15000"))
         r2.remainingBalance.compareTo(BigDecimal("15000")) shouldBe 0
 
         // 상태 확인: PARTIALLY_USED, usage = 70%
@@ -100,7 +100,7 @@ class E2EFlowTest : IntegrationTestSupport() {
     fun `transaction cancellation creates compensating entries`() {
         // 1. 발행 + 결제
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val result = redemptionService.redeem(voucher.id, merchantId, BigDecimal("30000"))
+        val result = redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
 
         // 잔액 20,000원
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("20000")) shouldBe 0
@@ -164,7 +164,7 @@ class E2EFlowTest : IntegrationTestSupport() {
     fun `refund should be rejected when usage below 60 percent`() {
         // 발행 50,000 + 결제 20,000 (usage 40%)
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("20000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("20000"))
 
         // 환불 시도 → 거절
         val ex = shouldThrow<BusinessException> {
@@ -177,9 +177,9 @@ class E2EFlowTest : IntegrationTestSupport() {
     fun `settlement should calculate redemptions minus cancellations`() {
         // 발행 + 3건 결제
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r1 = redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        val r1 = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
 
         // 1건 취소
         cancelService.cancel(r1.transactionId)
@@ -187,7 +187,7 @@ class E2EFlowTest : IntegrationTestSupport() {
         // 정산: 30,000 - 10,000 = 20,000
         val today = LocalDate.now()
         val settlement = settlementService.calculate(
-            merchantId, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())
+            sellerId, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())
         )
         settlement.totalAmount.compareTo(BigDecimal("20000")) shouldBe 0
     }
@@ -200,7 +200,7 @@ class E2EFlowTest : IntegrationTestSupport() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
 
         // 결제 → VOUCHER_REDEEMED (CRITICAL)
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("30000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
 
         // CRITICAL 감사 로그가 생성되었는지 확인
         val criticalLogs = auditLogRepository.findAll()

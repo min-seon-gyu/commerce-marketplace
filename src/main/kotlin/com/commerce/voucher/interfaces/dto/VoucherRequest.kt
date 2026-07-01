@@ -10,7 +10,7 @@ data class PurchaseVoucherRequest(
 )
 
 data class RedeemRequest(
-    @field:NotNull val merchantId: Long,
+    @field:NotNull val sellerId: Long,
     @field:NotNull @field:Min(1) val amount: BigDecimal, // 주문 총액 T (gross)
     val couponId: Long? = null,
 )

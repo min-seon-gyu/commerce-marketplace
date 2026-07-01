@@ -25,7 +25,7 @@ class SettlementCalculateValidationTest : IntegrationTestSupport() {
         mockMvc.post("/api/v1/settlements/calculate") {
             header("Authorization", "Bearer $adminToken")
             contentType = MediaType.APPLICATION_JSON
-            content = """{"merchantId": 1, "periodStart": "2026-06-01"}"""
+            content = """{"sellerId": 1, "periodStart": "2026-06-01"}"""
         }.andExpect {
             status { isBadRequest() }
             jsonPath("$.error.code") { value("INVALID_INPUT") }

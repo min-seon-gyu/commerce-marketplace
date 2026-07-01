@@ -9,7 +9,7 @@ import com.commerce.voucher.application.VoucherRefundService
 import com.commerce.voucher.application.VoucherWithdrawalService
 import com.commerce.voucher.domain.VoucherStatus
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
-import com.commerce.merchant.application.SettlementService
+import com.commerce.seller.application.SettlementService
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
@@ -32,17 +32,17 @@ class BoundaryTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchantOwner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, merchantOwner)
+        val sellerOwner = fixtures.createMember()
+        val seller = fixtures.createSeller(region, sellerOwner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Nested
@@ -52,7 +52,7 @@ class BoundaryTest : IntegrationTestSupport() {
         fun `should allow refund when usage is exactly 60 percent`() {
             // 50,000원 중 30,000원 사용 = 정확히 60%
             val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-            redemptionService.redeem(voucher.id, merchantId, BigDecimal("30000"))
+            redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
 
             val refunded = refundService.refund(voucher.id, memberId)
             refunded.status shouldBe VoucherStatus.REFUNDED
@@ -62,7 +62,7 @@ class BoundaryTest : IntegrationTestSupport() {
         fun `should reject refund when usage is 59 percent`() {
             // 50,000원 중 29,500원 사용 = 59%
             val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-            redemptionService.redeem(voucher.id, merchantId, BigDecimal("29500"))
+            redemptionService.redeem(voucher.id, sellerId, BigDecimal("29500"))
 
             val ex = shouldThrow<BusinessException> {
                 refundService.refund(voucher.id, memberId)
@@ -74,7 +74,7 @@ class BoundaryTest : IntegrationTestSupport() {
         fun `should allow refund when usage is 61 percent`() {
             // 50,000원 중 30,500원 사용 = 61%
             val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-            redemptionService.redeem(voucher.id, merchantId, BigDecimal("30500"))
+            redemptionService.redeem(voucher.id, sellerId, BigDecimal("30500"))
 
             val refunded = refundService.refund(voucher.id, memberId)
             refunded.status shouldBe VoucherStatus.REFUNDED
@@ -114,18 +114,18 @@ class BoundaryTest : IntegrationTestSupport() {
         fun `should reject duplicate settlement for same period`() {
             // 결제 1건 생성
             val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-            redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+            redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
 
             val today = LocalDate.now()
             val start = today.withDayOfMonth(1)
             val end = today.withDayOfMonth(today.lengthOfMonth())
 
             // 1차 정산 성공
-            settlementService.calculate(merchantId, start, end)
+            settlementService.calculate(sellerId, start, end)
 
             // 2차 정산 시도 → 거절
             val ex = shouldThrow<BusinessException> {
-                settlementService.calculate(merchantId, start, end)
+                settlementService.calculate(sellerId, start, end)
             }
             ex.errorCode shouldBe ErrorCode.INVALID_INPUT
         }

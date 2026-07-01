@@ -3,9 +3,9 @@ package com.commerce.support
 import com.commerce.member.application.MemberService
 import com.commerce.member.domain.Member
 import com.commerce.member.interfaces.dto.RegisterMemberRequest
-import com.commerce.merchant.application.MerchantService
-import com.commerce.merchant.application.RegisterMerchantRequest
-import com.commerce.merchant.domain.Merchant
+import com.commerce.seller.application.SellerService
+import com.commerce.seller.application.RegisterSellerRequest
+import com.commerce.seller.domain.Seller
 import com.commerce.promotion.application.CouponIssueService
 import com.commerce.promotion.application.PromotionService
 import com.commerce.promotion.domain.Coupon
@@ -27,7 +27,7 @@ import java.time.LocalDateTime
 class TestFixtures(
     private val regionService: RegionService,
     private val memberService: MemberService,
-    private val merchantService: MerchantService,
+    private val sellerService: SellerService,
     private val voucherIssueService: VoucherIssueService,
     private val voucherJpaRepository: VoucherJpaRepository,
     private val promotionService: PromotionService,
@@ -82,10 +82,10 @@ class TestFixtures(
         )
     }
 
-    fun createMerchant(region: Region, owner: Member): Merchant {
+    fun createSeller(region: Region, owner: Member): Seller {
         val id = nextId()
-        val merchant = merchantService.register(
-            RegisterMerchantRequest(
+        val seller = sellerService.register(
+            RegisterSellerRequest(
                 name = "테스트가게$id",
                 businessNumber = "123-45-${String.format("%05d", id)}",
                 category = "RESTAURANT",
@@ -93,7 +93,7 @@ class TestFixtures(
                 ownerId = owner.id,
             )
         )
-        return merchantService.approve(merchant.id)
+        return sellerService.approve(seller.id)
     }
 
     fun issueVoucher(

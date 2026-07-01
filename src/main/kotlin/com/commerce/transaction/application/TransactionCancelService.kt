@@ -5,8 +5,8 @@ import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.domain.AccountCode
 import com.commerce.ledger.domain.LedgerEntryType
-import com.commerce.merchant.domain.SettlementStatus
-import com.commerce.merchant.infrastructure.SettlementJpaRepository
+import com.commerce.seller.domain.SettlementStatus
+import com.commerce.seller.infrastructure.SettlementJpaRepository
 import com.commerce.point.application.PointEarnService
 import com.commerce.promotion.domain.CouponRedemption
 import com.commerce.promotion.infrastructure.CouponJpaRepository
@@ -55,12 +55,12 @@ class TransactionCancelService(
         val voucherId = original.voucherId
             ?: throw BusinessException(ErrorCode.INVALID_INPUT, "상품권 거래만 취소할 수 있습니다")
 
-        // 이미 정산(확정/지급)된 결제는 취소 불가 — 역정산 경로가 없어 가맹점 과지급·미수금 음수를 유발한다.
-        original.merchantId?.let { merchantId ->
+        // 이미 정산(확정/지급)된 결제는 취소 불가 — 역정산 경로가 없어 판매자 과지급·미수금 음수를 유발한다.
+        original.sellerId?.let { sellerId ->
             val day = original.createdAt.toLocalDate()
             val settled = settlementRepository
-                .existsByMerchantIdAndStatusInAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
-                    merchantId, listOf(SettlementStatus.CONFIRMED, SettlementStatus.PAID), day, day,
+                .existsBySellerIdAndStatusInAndPeriodStartLessThanEqualAndPeriodEndGreaterThanEqual(
+                    sellerId, listOf(SettlementStatus.CONFIRMED, SettlementStatus.PAID), day, day,
                 )
             if (settled) throw BusinessException(ErrorCode.TRANSACTION_NOT_CANCELLABLE, "이미 정산된 결제는 취소할 수 없습니다")
         }
@@ -96,7 +96,7 @@ class TransactionCancelService(
                 type = TransactionType.CANCELLATION,
                 amount = original.amount,
                 voucherId = voucherId,
-                merchantId = original.merchantId,
+                sellerId = original.sellerId,
                 originalTransactionId = original.id,
             )
             // Reverse ledger entries (debit VOUCHER_BALANCE, credit MERCHANT_RECEIVABLE)
@@ -146,7 +146,7 @@ class TransactionCancelService(
                 type = TransactionType.CANCELLATION,
                 amount = original.amount, // gross T (정산 집계 기준)
                 voucherId = voucherId,
-                merchantId = original.merchantId,
+                sellerId = original.sellerId,
                 originalTransactionId = original.id,
             )
 

@@ -15,7 +15,7 @@ object AuditEventTypePolicy {
 
     /** outbox 캡처 → relay(Kafka/직접) 비동기 적용 */
     val HIGH_EVENTS = setOf(
-        "MERCHANT_APPROVED", "MERCHANT_REJECTED", "MERCHANT_TERMINATED",
+        "SELLER_APPROVED", "SELLER_REJECTED", "SELLER_TERMINATED",
         "MEMBER_SUSPENDED", "MEMBER_WITHDRAWN", "REGION_POLICY_CHANGED",
         "SETTLEMENT_CONFIRMED",
     )

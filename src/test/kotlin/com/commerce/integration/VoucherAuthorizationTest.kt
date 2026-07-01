@@ -29,7 +29,7 @@ class VoucherAuthorizationTest : IntegrationTestSupport() {
 
     private var voucherId: Long = 0
     private var ownerId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
     private var otherMemberId: Long = 0
     private var otherVoucherId: Long = 0
 
@@ -37,18 +37,18 @@ class VoucherAuthorizationTest : IntegrationTestSupport() {
     fun setup() {
         val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         val voucher = fixtures.issueVoucher(owner.id, region.id, BigDecimal("50000"))
         val otherMember = fixtures.createMember()
         val otherVoucher = fixtures.issueVoucher(otherMember.id, region.id, BigDecimal("30000"))
         ownerId = owner.id
-        merchantId = merchant.id
+        sellerId = seller.id
         voucherId = voucher.id
         otherMemberId = otherMember.id
         otherVoucherId = otherVoucher.id
     }
 
-    private fun redeemBody() = """{"merchantId": $merchantId, "amount": 10000}"""
+    private fun redeemBody() = """{"sellerId": $sellerId, "amount": 10000}"""
 
     // ── 자금 이동: redeem / refund / withdraw ────────────────────────────────
 

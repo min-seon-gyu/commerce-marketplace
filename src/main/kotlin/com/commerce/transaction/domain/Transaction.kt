@@ -11,7 +11,7 @@ import java.math.BigDecimal
     name = "transactions",
     indexes = [
         Index(name = "idx_tx_voucher", columnList = "voucherId, createdAt"),
-        Index(name = "idx_tx_merchant_period", columnList = "merchantId, status, createdAt"),
+        Index(name = "idx_tx_seller_period", columnList = "sellerId, status, createdAt"),
     ]
 )
 class Transaction(
@@ -23,7 +23,7 @@ class Transaction(
     val amount: BigDecimal,
 
     val voucherId: Long? = null,
-    val merchantId: Long? = null,
+    val sellerId: Long? = null,
     val memberId: Long? = null,
     val originalTransactionId: Long? = null,
 

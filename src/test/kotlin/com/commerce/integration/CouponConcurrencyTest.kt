@@ -33,14 +33,14 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
     @Autowired lateinit var verificationService: LedgerVerificationService
 
     private var regionId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().replace("-", "").take(8).uppercase())
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -63,7 +63,7 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
             executor.submit {
                 latch.await()
                 try {
-                    orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+                    orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
                     success.incrementAndGet()
                 } catch (e: BusinessException) {
                     if (e.errorCode == ErrorCode.COUPON_ALREADY_USED)
@@ -113,7 +113,7 @@ class CouponConcurrencyTest : IntegrationTestSupport() {
             executor.submit {
                 latch.await()
                 try {
-                    orchestrator.redeem(ctx.voucherId, merchantId, BigDecimal("10000"), ctx.couponId)
+                    orchestrator.redeem(ctx.voucherId, sellerId, BigDecimal("10000"), ctx.couponId)
                     success.incrementAndGet()
                 } catch (e: BusinessException) {
                     if (e.errorCode == ErrorCode.PROMOTION_BUDGET_EXCEEDED)

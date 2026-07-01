@@ -5,7 +5,7 @@ import java.math.BigDecimal
 
 class VoucherRedeemedEvent(
     override val aggregateId: Long,
-    val merchantId: Long,
+    val sellerId: Long,
     val amount: BigDecimal,
     val remainingBalance: BigDecimal,
     val transactionId: Long,
@@ -16,5 +16,5 @@ class VoucherRedeemedEvent(
     override val previousState: String?
         get() = previousBalance?.let { """{"balance":$it}""" }
     override val currentState: String
-        get() = """{"balance":$remainingBalance,"amount":$amount,"merchantId":$merchantId}"""
+        get() = """{"balance":$remainingBalance,"amount":$amount,"sellerId":$sellerId}"""
 }

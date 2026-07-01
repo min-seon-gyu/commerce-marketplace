@@ -30,16 +30,16 @@ class CouponPointEarnIntegrationTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -52,7 +52,7 @@ class CouponPointEarnIntegrationTest : IntegrationTestSupport() {
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
         // T=10,000, D=3,000 → voucherCharged(T−D)=7,000 → 적립 1% = 70원 (할인분 D는 적립 제외)
-        val result = orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
 
         // 1) 포인트 잔액 = (T−D)의 1% = 70 (10,000의 1%=100 아님)
         val account = pointAccountRepository.findByMemberId(memberId)
