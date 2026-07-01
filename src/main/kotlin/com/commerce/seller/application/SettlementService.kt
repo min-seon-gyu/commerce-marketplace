@@ -9,11 +9,10 @@ import com.commerce.seller.domain.Settlement
 import com.commerce.seller.domain.event.SettlementConfirmedEvent
 import com.commerce.seller.infrastructure.SellerJpaRepository
 import com.commerce.seller.infrastructure.SettlementJpaRepository
+import com.commerce.order.infrastructure.OrderLineJpaRepository
 import com.commerce.region.domain.SettlementPeriod
 import com.commerce.transaction.application.TransactionService
-import com.commerce.transaction.domain.TransactionStatus
 import com.commerce.transaction.domain.TransactionType
-import com.commerce.transaction.infrastructure.TransactionJpaRepository
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -27,7 +26,7 @@ import java.time.ZoneId
 @Transactional(readOnly = true)
 class SettlementService(
     private val settlementRepository: SettlementJpaRepository,
-    private val transactionRepository: TransactionJpaRepository,
+    private val orderLineRepository: OrderLineJpaRepository,
     private val transactionService: TransactionService,
     private val ledgerService: LedgerService,
     private val sellerRepository: SellerJpaRepository,
@@ -65,9 +64,8 @@ class SettlementService(
         // 재실행 안전: 같은 구간 정산이 이미 있으면 스킵(unique 제약과 이중 방어).
         if (settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, start, end) != null) return null
 
-        val totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
-            sellerId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED,
-            start.atStartOfDay(), end.atTime(LocalTime.MAX),
+        val totalAmount = orderLineRepository.sumSellerSalesInPeriod(
+            sellerId, start.atStartOfDay(), end.atTime(LocalTime.MAX),
         )
         // 0원 정산은 만들지 않는다(노이즈 방지 + confirm 단계의 0원 고착 문제와 일관).
         if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) return null
@@ -95,10 +93,8 @@ class SettlementService(
         val start = periodStart.atStartOfDay()
         val end = periodEnd.atTime(LocalTime.MAX)
 
-        // COMPLETED 상태인 결제만 합산 (취소된 원 거래는 CANCELLED 상태이므로 자동 제외)
-        val totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
-            sellerId, TransactionType.REDEMPTION, TransactionStatus.COMPLETED, start, end
-        )
+        // PAID 주문의 라인 금액만 합산 (취소 주문은 CANCELLED 상태이므로 자동 제외)
+        val totalAmount = orderLineRepository.sumSellerSalesInPeriod(sellerId, start, end)
 
         return settlementRepository.save(
             Settlement(
@@ -116,28 +112,26 @@ class SettlementService(
         settlement.confirm()
 
         // 확정 시점에 totalAmount를 재계산한다(스냅샷 신뢰 금지).
-        // calculate 이후·confirm 이전에 취소된 결제는 CANCELLED가 되어 합산에서 제외되므로,
-        // 취소된 결제분을 판매자에 지급(과지급)하고 MERCHANT_RECEIVABLE을 음수로 만드는 결함을 막는다.
-        settlement.totalAmount = transactionRepository.sumAmountBySellerAndTypeAndPeriod(
+        // calculate 이후·confirm 이전에 취소된 주문은 CANCELLED가 되어 합산에서 제외되므로,
+        // 취소된 주문분을 판매자에 지급(과지급)하고 SELLER_PAYABLE을 음수로 만드는 결함을 막는다.
+        settlement.totalAmount = orderLineRepository.sumSellerSalesInPeriod(
             settlement.sellerId,
-            TransactionType.REDEMPTION,
-            TransactionStatus.COMPLETED,
             settlement.periodStart.atStartOfDay(),
             settlement.periodEnd.atTime(LocalTime.MAX),
         )
 
-        // 0원 정산(해당 기간 결제 없음/전부 취소)은 원장 분개를 만들지 않는다 — Transaction은 양수 금액만 허용하므로
+        // 0원 정산(해당 기간 주문 없음/전부 취소)은 원장 분개를 만들지 않는다 — Transaction은 양수 금액만 허용하므로
         // 0원 거래 생성은 예외가 되어 정산이 PENDING에 영구 고착된다.
         if (settlement.totalAmount.compareTo(BigDecimal.ZERO) > 0) {
-            // 정산 확정 시 원장 기록: 판매자 미수금 → 정산 미지급금
+            // 정산 확정 시 원장 기록: 판매자 미지급금(SELLER_PAYABLE) → 정산 확정 미지급금(SETTLEMENT_PAYABLE)
             val tx = transactionService.create(
                 type = TransactionType.SETTLEMENT,
                 amount = settlement.totalAmount,
                 sellerId = settlement.sellerId,
             )
             ledgerService.record(
-                debitAccount = AccountCode.SETTLEMENT_PAYABLE,
-                creditAccount = AccountCode.MERCHANT_RECEIVABLE,
+                debitAccount = AccountCode.SELLER_PAYABLE,
+                creditAccount = AccountCode.SETTLEMENT_PAYABLE,
                 amount = settlement.totalAmount,
                 transactionId = tx.id,
                 entryType = LedgerEntryType.SETTLEMENT,

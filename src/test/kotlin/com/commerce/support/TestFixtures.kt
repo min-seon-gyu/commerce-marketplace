@@ -3,9 +3,16 @@ package com.commerce.support
 import com.commerce.member.application.MemberService
 import com.commerce.member.domain.Member
 import com.commerce.member.interfaces.dto.RegisterMemberRequest
+import com.commerce.cart.application.CartService
+import com.commerce.order.application.OrderService
+import com.commerce.order.domain.Order
+import com.commerce.product.application.ProductService
+import com.commerce.product.application.SkuSpec
+import com.commerce.product.domain.ProductCategory
 import com.commerce.seller.application.SellerService
 import com.commerce.seller.application.RegisterSellerRequest
 import com.commerce.seller.domain.Seller
+import com.commerce.seller.infrastructure.SellerJpaRepository
 import com.commerce.promotion.application.CouponIssueService
 import com.commerce.promotion.application.PromotionService
 import com.commerce.promotion.domain.Coupon
@@ -28,10 +35,14 @@ class TestFixtures(
     private val regionService: RegionService,
     private val memberService: MemberService,
     private val sellerService: SellerService,
+    private val sellerRepository: SellerJpaRepository,
     private val voucherIssueService: VoucherIssueService,
     private val voucherJpaRepository: VoucherJpaRepository,
     private val promotionService: PromotionService,
     private val couponIssueService: CouponIssueService,
+    private val productService: ProductService,
+    private val cartService: CartService,
+    private val orderService: OrderService,
 ) {
     private val base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
@@ -134,5 +145,33 @@ class TestFixtures(
     @Transactional
     fun forcePurchasedAt(voucherId: Long, purchasedAt: LocalDateTime) {
         voucherJpaRepository.updatePurchasedAt(voucherId, purchasedAt)
+    }
+
+    /** 판매 중인 SKU(가격=price, 재고=stock)를 만들고 SKU id 반환. */
+    @Transactional
+    fun createOnSaleSku(sellerId: Long, price: BigDecimal, stock: Int = 1000): Long {
+        val ownerId = sellerRepository.findById(sellerId).orElseThrow().owner.id
+        val product = productService.createProduct(
+            requesterMemberId = ownerId,
+            sellerId = sellerId,
+            name = "상품${nextId()}",
+            description = null,
+            category = ProductCategory.OTHER,
+            skus = listOf(SkuSpec("SKU-${nextId()}", "기본", emptyMap(), price, stock)),
+        )
+        productService.onSale(ownerId, product.id)
+        return productService.getDetail(product.id).skus.first().sku.id
+    }
+
+    /** 단일 SKU 주문 1건(결제 완료). placeOrder는 자체 tx/락을 관리하므로 감싸지 않는다. */
+    fun placeSingleOrder(buyerId: Long, skuId: Long, quantity: Int = 1): Order {
+        cartService.addItem(buyerId, skuId, quantity)
+        return orderService.placeOrder(buyerId)
+    }
+
+    /** 판매자에게 amount 매출 1건(주문 1건, price=amount×qty1)을 발생시키고 주문을 반환. */
+    fun sellerSale(buyerId: Long, sellerId: Long, amount: BigDecimal): Order {
+        val skuId = createOnSaleSku(sellerId, amount, stock = 1)
+        return placeSingleOrder(buyerId, skuId, 1)
     }
 }

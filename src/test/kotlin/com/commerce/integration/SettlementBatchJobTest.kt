@@ -4,7 +4,6 @@ import com.commerce.seller.domain.SettlementStatus
 import com.commerce.seller.infrastructure.SettlementJpaRepository
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
-import com.commerce.voucher.application.VoucherRedemptionService
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
@@ -29,7 +28,6 @@ class SettlementBatchJobTest : IntegrationTestSupport() {
 
     @Autowired lateinit var jobLauncherTestUtils: JobLauncherTestUtils
     @Autowired lateinit var fixtures: TestFixtures
-    @Autowired lateinit var redemptionService: VoucherRedemptionService
     @Autowired lateinit var settlementRepository: SettlementJpaRepository
 
     private val kst = ZoneId.of("Asia/Seoul")
@@ -40,11 +38,10 @@ class SettlementBatchJobTest : IntegrationTestSupport() {
         val region = fixtures.createRegion() // MONTHLY → 이번 달 구간, 오늘 결제는 구간 내
         val member = fixtures.createMember()
 
-        // 매출 있는 판매자: 10,000 + 5,000 결제(COMPLETED REDEMPTION) → 정산 15,000
+        // 매출 있는 판매자: 10,000 + 5,000 주문(PAID) → 정산 15,000
         val sellerWithSales = fixtures.createSeller(region, member)
-        val voucher = fixtures.issueVoucher(member.id, region.id, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, sellerWithSales.id, BigDecimal("10000"))
-        redemptionService.redeem(voucher.id, sellerWithSales.id, BigDecimal("5000"))
+        fixtures.sellerSale(member.id, sellerWithSales.id, BigDecimal("10000"))
+        fixtures.sellerSale(member.id, sellerWithSales.id, BigDecimal("5000"))
 
         // 매출 없는 판매자: 정산이 만들어지면 안 됨(0원 스킵)
         val sellerNoSales = fixtures.createSeller(region, fixtures.createMember())
