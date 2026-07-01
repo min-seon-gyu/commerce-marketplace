@@ -35,18 +35,10 @@ class TestFixtures(
     private val cartService: CartService,
     private val orderService: OrderService,
 ) {
-    private val base36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-
     companion object {
         /** JVM-wide counter — shared across all Spring contexts so separate ApplicationContexts
-         *  (e.g. those created by @MockBean) do not regenerate the same region codes. */
+         *  (e.g. those created by @MockBean) do not regenerate the same unique values. */
         private val globalCounter = java.util.concurrent.atomic.AtomicInteger(0)
-    }
-
-    /** 충돌 없는 유니크 2글자 region 코드 생성 (region_code 컬럼이 length=2, unique 제약) */
-    private fun nextRegionCode(): String {
-        val n = globalCounter.getAndIncrement() % (36 * 36)
-        return "${base36[n / 36]}${base36[n % 36]}"
     }
 
     /** JVM-wide unique int used for emails, business numbers, and other unique fields.

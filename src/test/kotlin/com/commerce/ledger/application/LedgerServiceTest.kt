@@ -22,14 +22,14 @@ class LedgerServiceTest : IntegrationTestSupport() {
 
     @Test
     fun `record should create debit and credit entry pair (2 rows)`() {
-        val tx = transactionService.create(TransactionType.PURCHASE, BigDecimal("50000"))
+        val tx = transactionService.create(TransactionType.ORDER_PAYMENT, BigDecimal("50000"))
 
         ledgerService.record(
-            debitAccount = AccountCode.VOUCHER_BALANCE,
-            creditAccount = AccountCode.MEMBER_CASH,
+            debitAccount = AccountCode.CUSTOMER_CASH,
+            creditAccount = AccountCode.SELLER_PAYABLE,
             amount = BigDecimal("50000"),
             transactionId = tx.id,
-            entryType = LedgerEntryType.PURCHASE
+            entryType = LedgerEntryType.ORDER_PAYMENT
         )
 
         val entries = ledgerRepository.findByTransactionId(tx.id)
@@ -37,18 +37,18 @@ class LedgerServiceTest : IntegrationTestSupport() {
 
         val debit = entries.first { it.side == LedgerEntrySide.DEBIT }
         val credit = entries.first { it.side == LedgerEntrySide.CREDIT }
-        debit.account shouldBe AccountCode.VOUCHER_BALANCE
+        debit.account shouldBe AccountCode.CUSTOMER_CASH
         debit.amount.compareTo(BigDecimal("50000")) shouldBe 0
-        credit.account shouldBe AccountCode.MEMBER_CASH
+        credit.account shouldBe AccountCode.SELLER_PAYABLE
         credit.amount.compareTo(BigDecimal("50000")) shouldBe 0
     }
 
     @Test
     fun `global debit and credit totals should be equal after balanced entries`() {
-        val tx = transactionService.create(TransactionType.PURCHASE, BigDecimal("30000"))
+        val tx = transactionService.create(TransactionType.ORDER_PAYMENT, BigDecimal("30000"))
         ledgerService.record(
-            AccountCode.VOUCHER_BALANCE, AccountCode.MEMBER_CASH,
-            BigDecimal("30000"), tx.id, LedgerEntryType.PURCHASE
+            AccountCode.CUSTOMER_CASH, AccountCode.SELLER_PAYABLE,
+            BigDecimal("30000"), tx.id, LedgerEntryType.ORDER_PAYMENT
         )
 
         val debitTotal = ledgerService.globalDebitTotal()
