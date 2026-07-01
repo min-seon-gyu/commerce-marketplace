@@ -1,4 +1,4 @@
-package com.commerce.common.audit
+package com.commerce.order.infrastructure.outbox
 
 import jakarta.persistence.*
 import org.hibernate.annotations.JdbcTypeCode
@@ -6,15 +6,15 @@ import org.hibernate.type.SqlTypes
 import java.time.LocalDateTime
 
 /**
- * Transactional Outbox 레코드. 비즈니스 트랜잭션과 같은 tx에서 기록되어(원자적 캡처),
- * relay가 비동기로 감사 로그를 적용한다. payload(JSON)에 감사 복원에 필요한 전체 상태를 담는다.
+ * 주문 이벤트 Transactional Outbox 레코드. 주문 트랜잭션과 같은 tx에서 기록되어(원자적 캡처),
+ * relay가 비동기로 Kafka 발행/직접 적용한다. payload(JSON)에 이벤트 복원에 필요한 상태를 담는다.
  */
 @Entity
 @Table(
-    name = "outbox_events",
-    indexes = [Index(name = "idx_outbox_unpublished", columnList = "published, id")],
+    name = "order_outbox_events",
+    indexes = [Index(name = "idx_order_outbox_unpublished", columnList = "published, id")],
 )
-class OutboxEvent(
+class OrderOutboxEvent(
     @Column(nullable = false, unique = true, length = 36)
     val eventId: String,
 
@@ -26,10 +26,6 @@ class OutboxEvent(
 
     @Column(nullable = false)
     val aggregateId: Long,
-
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 10)
-    val severity: AuditSeverity,
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "json", nullable = false)

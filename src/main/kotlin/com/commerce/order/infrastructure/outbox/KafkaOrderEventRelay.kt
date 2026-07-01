@@ -1,4 +1,4 @@
-package com.commerce.common.audit
+package com.commerce.order.infrastructure.outbox
 
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
@@ -9,19 +9,19 @@ import org.springframework.stereotype.Component
 
 /**
  * Kafka 전달 relay (킬스위치 ON, prod 기본). 미발행 outbox 이벤트를 Kafka 토픽으로 발행하고 발행 마킹한다.
- * 실제 감사 로그 기록은 [AuditKafkaConsumer]가 토픽을 소비해 수행한다(전달과 적용을 분리).
+ * 실제 이벤트 로그 기록은 [OrderEventConsumer]가 토픽을 소비해 수행한다(전달과 적용을 분리).
  */
 @Component
-@ConditionalOnProperty(prefix = "audit.kafka", name = ["enabled"], havingValue = "true")
-class KafkaOutboxRelay(
-    private val outboxRepository: OutboxEventRepository,
-    private val applier: OutboxAuditApplier,
+@ConditionalOnProperty(prefix = "order.kafka", name = ["enabled"], havingValue = "true")
+class KafkaOrderEventRelay(
+    private val outboxRepository: OrderOutboxEventRepository,
+    private val applier: OrderEventApplier,
     private val kafkaTemplate: KafkaTemplate<String, String>,
-    @Value("\${audit.kafka.topic:audit-events}") private val topic: String,
+    @Value("\${order.kafka.topic:order-events}") private val topic: String,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(fixedDelayString = "\${audit.outbox.poll-ms:1000}")
+    @Scheduled(fixedDelayString = "\${order.outbox.poll-ms:1000}")
     fun poll() {
         relayOnce()
     }

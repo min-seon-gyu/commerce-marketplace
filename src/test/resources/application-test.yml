@@ -17,9 +17,9 @@ settlement:
     scheduled:
       enabled: false            # 테스트에선 스케줄러 비활성(잡은 JobLauncherTestUtils로 수동 실행)
 
-audit:
+order:
   kafka:
-    enabled: false          # 테스트 기본: 브로커 없이 DirectOutboxRelay 사용
+    enabled: false          # 테스트 기본: 브로커 없이 DirectOrderEventRelay 사용
     retry:                  # EmbeddedKafka 테스트: 빠르게 재시도 소진 후 DLT(20s await 내)
       initial-ms: 100
       multiplier: 2.0
