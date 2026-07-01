@@ -34,11 +34,6 @@ class SecurityConfig(
                 // 구체 매처가 anyRequest()보다 먼저 평가된다. GET 조회는 매처에서 제외해 공개 유지.
                 it.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")               // 원장 admin
                 it.requestMatchers("/api/v1/settlements/**").hasRole("ADMIN")          // 정산 계산/확정/이의/지급
-                it.requestMatchers(HttpMethod.POST, "/api/v1/regions").hasRole("ADMIN")
-                it.requestMatchers(HttpMethod.PUT, "/api/v1/regions/**").hasRole("ADMIN")
-                it.requestMatchers(
-                    HttpMethod.POST, "/api/v1/regions/*/suspend", "/api/v1/regions/*/activate",
-                ).hasRole("ADMIN")
                 it.requestMatchers(
                     HttpMethod.POST,
                     "/api/v1/sellers/*/approve", "/api/v1/sellers/*/reject",

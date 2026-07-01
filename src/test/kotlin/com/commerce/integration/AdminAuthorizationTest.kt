@@ -67,9 +67,9 @@ class AdminAuthorizationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `public region list stays accessible without token`() {
-        // 과잠금 회귀 방지: 공개 조회 엔드포인트는 토큰 없이도 접근 가능해야 한다.
-        mockMvc.get("/api/v1/regions")
+    fun `public product list stays accessible without token`() {
+        // 과잠금 회귀 방지: 공개 조회 엔드포인트(상품 목록)는 토큰 없이도 접근 가능해야 한다.
+        mockMvc.get("/api/v1/products")
             .andExpect { status { isOk() } }
     }
 

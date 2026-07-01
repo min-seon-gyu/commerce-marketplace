@@ -35,16 +35,15 @@ class SettlementBatchJobTest : IntegrationTestSupport() {
     @Test
     fun `batch creates settlements for approved sellers with sales and skips zero, idempotent on rerun`() {
         val today = LocalDate.now(kst)
-        val region = fixtures.createRegion() // MONTHLY → 이번 달 구간, 오늘 결제는 구간 내
         val member = fixtures.createMember()
 
         // 매출 있는 판매자: 10,000 + 5,000 주문(PAID) → 정산 15,000
-        val sellerWithSales = fixtures.createSeller(region, member)
+        val sellerWithSales = fixtures.createSeller(member)
         fixtures.sellerSale(member.id, sellerWithSales.id, BigDecimal("10000"))
         fixtures.sellerSale(member.id, sellerWithSales.id, BigDecimal("5000"))
 
         // 매출 없는 판매자: 정산이 만들어지면 안 됨(0원 스킵)
-        val sellerNoSales = fixtures.createSeller(region, fixtures.createMember())
+        val sellerNoSales = fixtures.createSeller(fixtures.createMember())
 
         // 1차 실행
         val firstRun = jobLauncherTestUtils.launchJob(

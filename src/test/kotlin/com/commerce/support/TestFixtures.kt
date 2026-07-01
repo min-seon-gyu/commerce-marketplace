@@ -19,9 +19,6 @@ import com.commerce.promotion.domain.Coupon
 import com.commerce.promotion.domain.DiscountType
 import com.commerce.promotion.domain.Promotion
 import com.commerce.promotion.interfaces.dto.CreatePromotionRequest
-import com.commerce.region.application.RegionService
-import com.commerce.region.domain.Region
-import com.commerce.region.interfaces.dto.CreateRegionRequest
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
@@ -29,7 +26,6 @@ import java.time.LocalDateTime
 
 @Component
 class TestFixtures(
-    private val regionService: RegionService,
     private val memberService: MemberService,
     private val sellerService: SellerService,
     private val sellerRepository: SellerJpaRepository,
@@ -58,25 +54,6 @@ class TestFixtures(
      *  (e.g. contexts created by @MockBean). */
     private fun nextId(): Int = globalCounter.getAndIncrement()
 
-    fun createRegion(
-        name: String = "성남시",
-        code: String = "SN", // (미사용) 코드는 nextRegionCode()로 유니크 생성해 충돌 방지
-        monthlyLimit: BigDecimal = BigDecimal("10000000000"),
-        purchaseLimit: BigDecimal = BigDecimal("5000000"),
-        settlementPeriod: String = "MONTHLY",
-    ): Region {
-        return regionService.create(
-            CreateRegionRequest(
-                name = name,
-                regionCode = nextRegionCode(),
-                discountRate = BigDecimal("0.10"),
-                purchaseLimitPerPerson = purchaseLimit,
-                monthlyIssuanceLimit = monthlyLimit,
-                settlementPeriod = settlementPeriod,
-            )
-        )
-    }
-
     fun createMember(email: String? = null): Member {
         val id = nextId()
         return memberService.register(
@@ -88,14 +65,14 @@ class TestFixtures(
         )
     }
 
-    fun createSeller(region: Region, owner: Member): Seller {
+    fun createSeller(owner: Member, settlementPeriod: String = "MONTHLY"): Seller {
         val id = nextId()
         val seller = sellerService.register(
             RegisterSellerRequest(
                 name = "테스트가게$id",
                 businessNumber = "123-45-${String.format("%05d", id)}",
                 category = "RESTAURANT",
-                regionId = region.id,
+                settlementPeriod = settlementPeriod,
                 ownerId = owner.id,
             )
         )

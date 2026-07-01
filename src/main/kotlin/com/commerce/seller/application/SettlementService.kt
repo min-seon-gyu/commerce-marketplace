@@ -10,7 +10,7 @@ import com.commerce.seller.domain.event.SettlementConfirmedEvent
 import com.commerce.seller.infrastructure.SellerJpaRepository
 import com.commerce.seller.infrastructure.SettlementJpaRepository
 import com.commerce.order.infrastructure.OrderLineJpaRepository
-import com.commerce.region.domain.SettlementPeriod
+import com.commerce.seller.domain.SettlementPeriod
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
 import org.springframework.context.ApplicationEventPublisher
@@ -34,7 +34,7 @@ class SettlementService(
 ) {
 
     /**
-     * 판매자 소속 지자체의 정산 주기(일/주/월)에 맞춰 KST 역월 기준 정산 기간을 산출한 뒤 정산한다.
+     * 판매자의 정산 주기(일/주/월)에 맞춰 KST 역월 기준 정산 기간을 산출한 뒤 정산한다.
      * 기준일(referenceDate)이 속한 주기 구간 [start, end]를 닫힌 구간으로 계산한다.
      *   - DAILY  : 기준일 당일
      *   - WEEKLY : 기준일이 속한 ISO 주(월~일)
@@ -47,19 +47,19 @@ class SettlementService(
     ): Settlement {
         val seller = sellerRepository.findById(sellerId)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
-        val (start, end) = resolvePeriod(seller.region.policy.settlementPeriod, referenceDate)
+        val (start, end) = resolvePeriod(seller.settlementPeriod, referenceDate)
         return calculate(sellerId, start, end)
     }
 
     /**
      * 결산 배치용: 기준일이 속한 정산 구간의 **미저장** Settlement를 만든다(중복 또는 0원이면 null=스킵).
      * calculate()와 달리 예외를 던지지 않아 청크 처리에서 head-of-line 없이 다음 판매자으로 진행한다.
-     * 자체 read-only tx 안에서 판매자을 로드하므로 region(LAZY) 접근이 안전하다(reader가 넘긴 detached 엔티티 미사용).
+     * 자체 read-only tx 안에서 판매자를 로드해 정산주기를 읽는다.
      */
     @Transactional(readOnly = true)
     fun buildSettlementForBatch(sellerId: Long, referenceDate: LocalDate): Settlement? {
         val seller = sellerRepository.findById(sellerId).orElse(null) ?: return null
-        val (start, end) = resolvePeriod(seller.region.policy.settlementPeriod, referenceDate)
+        val (start, end) = resolvePeriod(seller.settlementPeriod, referenceDate)
 
         // 재실행 안전: 같은 구간 정산이 이미 있으면 스킵(unique 제약과 이중 방어).
         if (settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, start, end) != null) return null

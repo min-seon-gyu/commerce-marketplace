@@ -20,9 +20,8 @@ class SettlementPeriodTest : IntegrationTestSupport() {
     @Autowired lateinit var settlementService: SettlementService
 
     private fun setupAndSell(settlementPeriod: String, amount: BigDecimal): Long {
-        val region = fixtures.createRegion(settlementPeriod = settlementPeriod)
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner, settlementPeriod)
         val buyer = fixtures.createMember()
         fixtures.sellerSale(buyer.id, seller.id, amount) // PAID 주문 1건 → 판매자 매출 amount
         return seller.id

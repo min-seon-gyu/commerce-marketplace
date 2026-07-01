@@ -60,8 +60,7 @@ class IdempotencyStatusCodeTest {
 
     @Test
     fun `idempotent replay preserves original 201 CREATED status`() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
-        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember())
         val buyer = fixtures.createMember()
         val skuId = fixtures.createOnSaleSku(seller.id, BigDecimal("50000"), 5)
         cartService.addItem(buyer.id, skuId, 1)

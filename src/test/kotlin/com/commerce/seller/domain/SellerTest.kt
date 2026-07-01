@@ -4,9 +4,6 @@ import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.member.domain.Member
 import com.commerce.member.domain.MemberStatus
-import com.commerce.region.domain.Region
-import com.commerce.region.domain.RegionPolicy
-import com.commerce.region.domain.SettlementPeriod
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.core.spec.style.DescribeSpec
 import io.kotest.matchers.shouldBe
@@ -14,9 +11,8 @@ import java.math.BigDecimal
 
 class SellerTest : DescribeSpec({
     fun createSeller(status: SellerStatus = SellerStatus.PENDING_APPROVAL): Seller {
-        val region = Region("성남시", "SN", RegionPolicy(BigDecimal("0.10"), BigDecimal("500000"), BigDecimal("10000000000"), BigDecimal("0.60"), SettlementPeriod.MONTHLY))
         val owner = Member("owner@test.com", "사장님", "encoded", MemberStatus.ACTIVE)
-        return Seller("테스트가게", "123-45-67890", SellerCategory.RESTAURANT, region, owner, status)
+        return Seller("테스트가게", "123-45-67890", SellerCategory.RESTAURANT, SettlementPeriod.MONTHLY, owner, status)
     }
 
     describe("Seller state transitions") {

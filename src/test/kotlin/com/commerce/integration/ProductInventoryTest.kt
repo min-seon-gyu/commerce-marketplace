@@ -28,9 +28,8 @@ class ProductInventoryTest : IntegrationTestSupport() {
 
     @Test
     fun `product with skus and initial stock is created and retrievable`() {
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner) // APPROVED
+        val seller = fixtures.createSeller(owner) // APPROVED
 
         val product = productService.createProduct(
             requesterMemberId = owner.id,
@@ -53,9 +52,8 @@ class ProductInventoryTest : IntegrationTestSupport() {
 
     @Test
     fun `duplicate sku code is rejected`() {
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         val dup = "DUP-${owner.id}"
 
         val ex = shouldThrow<BusinessException> {
@@ -69,9 +67,8 @@ class ProductInventoryTest : IntegrationTestSupport() {
 
     @Test
     fun `non-owner cannot create product for a seller`() {
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         val stranger = fixtures.createMember()
 
         val ex = shouldThrow<BusinessException> {

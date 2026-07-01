@@ -32,10 +32,8 @@ class SettlementConfirmTest : IntegrationTestSupport() {
 
     @BeforeEach
     fun setup() {
-        val region = fixtures.createRegion()
         val member = fixtures.createMember()
-        val seller = fixtures.createSeller(region, fixtures.createMember())
-        regionId = region.id
+        val seller = fixtures.createSeller(fixtures.createMember())
         memberId = member.id
         sellerId = seller.id
     }

@@ -23,8 +23,7 @@ class OrderOutboxRecorderTest : IntegrationTestSupport() {
 
     @Test
     fun `order placed event is captured in outbox as unpublished`() {
-        val region = fixtures.createRegion()
-        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember())
         val buyer = fixtures.createMember()
 
         val order = fixtures.sellerSale(buyer.id, seller.id, BigDecimal("10000"))

@@ -33,9 +33,8 @@ class OrderConcurrencyTest : IntegrationTestSupport() {
 
     @Test
     fun `concurrent orders on limited stock should not oversell`() {
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         val product = productService.createProduct(
             owner.id, seller.id, "한정판 의자", null, ProductCategory.FURNITURE,
             listOf(SkuSpec("LTD-${owner.id}", "기본", emptyMap(), BigDecimal("50000"), 5)),

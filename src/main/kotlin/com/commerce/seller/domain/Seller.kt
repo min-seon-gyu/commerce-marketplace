@@ -4,7 +4,6 @@ import com.commerce.common.domain.BaseEntity
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.member.domain.Member
-import com.commerce.region.domain.Region
 import jakarta.persistence.*
 
 @Entity
@@ -20,9 +19,9 @@ class Seller(
     @Column(nullable = false, length = 20)
     val category: SellerCategory,
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "region_id", nullable = false)
-    val region: Region,
+    @Enumerated(EnumType.STRING)
+    @Column(name = "settlement_period", nullable = false, length = 10)
+    val settlementPeriod: SettlementPeriod,
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "owner_id", nullable = false)

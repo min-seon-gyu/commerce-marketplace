@@ -68,8 +68,7 @@ class IdempotencyConcurrencyTest {
      */
     @Test
     fun `same Idempotency-Key concurrent checkout should place exactly one order`() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
-        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember())
         val buyer = fixtures.createMember()
         val skuId = fixtures.createOnSaleSku(seller.id, BigDecimal("50000"), 5)
         cartService.addItem(buyer.id, skuId, 1)
