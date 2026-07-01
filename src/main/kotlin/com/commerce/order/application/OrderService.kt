@@ -11,6 +11,8 @@ import com.commerce.ledger.domain.LedgerEntryType
 import com.commerce.order.domain.Order
 import com.commerce.order.domain.OrderLine
 import com.commerce.order.domain.OrderStatus
+import com.commerce.order.domain.event.OrderCancelledEvent
+import com.commerce.order.domain.event.OrderPlacedEvent
 import com.commerce.order.infrastructure.OrderJpaRepository
 import com.commerce.order.infrastructure.OrderLineJpaRepository
 import com.commerce.point.application.PointEarnService
@@ -19,6 +21,7 @@ import com.commerce.product.infrastructure.ProductJpaRepository
 import com.commerce.product.infrastructure.SkuJpaRepository
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
+import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
 import org.springframework.transaction.support.TransactionTemplate
@@ -49,6 +52,7 @@ class OrderService(
     private val ledgerService: LedgerService,
     private val pointEarnService: PointEarnService,
     private val transactionTemplate: TransactionTemplate,
+    private val eventPublisher: ApplicationEventPublisher,
 ) {
 
     private data class LineSpec(val skuId: Long, val sellerId: Long, val quantity: Int, val unitPrice: BigDecimal)
@@ -93,6 +97,8 @@ class OrderService(
 
                 pointEarnService.earn(memberId, total, tx.id)
                 cartService.clear(memberId)
+                // 주문 이벤트 발행 → OrderOutboxRecorder(BEFORE_COMMIT)가 같은 tx에서 outbox 캡처(원자적)
+                eventPublisher.publishEvent(OrderPlacedEvent(order.id, memberId, total))
                 order
             }!!
         }
@@ -128,6 +134,7 @@ class OrderService(
                 comp.complete()
                 o.paymentTransactionId?.let { pointEarnService.reverseEarn(requesterMemberId, it, comp.id) }
                 o.cancel()
+                eventPublisher.publishEvent(OrderCancelledEvent(o.id, requesterMemberId, o.totalAmount))
                 o
             }!!
         }

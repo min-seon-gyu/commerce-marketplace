@@ -75,12 +75,12 @@ management:
       slo:
         http.server.requests: 10ms,50ms,100ms,200ms,500ms,1s,2s
 
-# 감사 이벤트 Transactional Outbox 전달
-audit:
+# 주문 이벤트 Transactional Outbox 전달(Kafka)
+order:
   kafka:
-    enabled: ${AUDIT_KAFKA_ENABLED:true}   # false면 브로커 없이 직접 relay(로컬/CI 기본 대안)
-    topic: audit-events
-    group: audit-log-writers
+    enabled: ${ORDER_KAFKA_ENABLED:true}   # false면 브로커 없이 직접 relay(로컬/CI 기본 대안)
+    topic: order-events
+    group: order-event-writers
   outbox:
     poll-ms: 1000
     max-attempts: 5             # 전달/적용 실패 격리(quarantine) 임계

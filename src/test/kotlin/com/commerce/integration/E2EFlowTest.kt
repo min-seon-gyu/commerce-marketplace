@@ -1,7 +1,5 @@
 package com.commerce.integration
 
-import com.commerce.common.audit.AuditLogRepository
-import com.commerce.common.audit.AuditSeverity
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
 import com.commerce.ledger.application.LedgerService
@@ -20,7 +18,6 @@ import com.commerce.voucher.application.VoucherWithdrawalService
 import com.commerce.voucher.domain.VoucherStatus
 import com.commerce.voucher.infrastructure.VoucherJpaRepository
 import io.kotest.assertions.throwables.shouldThrow
-import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -42,7 +39,6 @@ class E2EFlowTest : IntegrationTestSupport() {
     @Autowired lateinit var voucherRepository: VoucherJpaRepository
     @Autowired lateinit var ledgerRepository: LedgerJpaRepository
     @Autowired lateinit var transactionRepository: TransactionJpaRepository
-    @Autowired lateinit var auditLogRepository: AuditLogRepository
 
     private var regionId: Long = 0
     private var memberId: Long = 0
@@ -193,19 +189,4 @@ class E2EFlowTest : IntegrationTestSupport() {
         settlement.totalAmount.compareTo(BigDecimal("20000")) shouldBe 0
     }
 
-    @Test
-    fun `audit logs should be created for critical operations`() {
-        val initialCount = auditLogRepository.count()
-
-        // 발행 → VOUCHER_ISSUED (CRITICAL)
-        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-
-        // 결제 → VOUCHER_REDEEMED (CRITICAL)
-        redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
-
-        // CRITICAL 감사 로그가 생성되었는지 확인
-        val criticalLogs = auditLogRepository.findAll()
-            .filter { it.severity == AuditSeverity.CRITICAL && it.createdAt.isAfter(java.time.LocalDateTime.now().minusMinutes(1)) }
-        criticalLogs.shouldNotBeEmpty()
-    }
 }

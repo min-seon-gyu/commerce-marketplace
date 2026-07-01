@@ -95,6 +95,6 @@ tasks.withType<Test> {
     useJUnitPlatform()
     // 메모리/시간 제약 환경에서 EmbeddedKafka 통합 테스트를 분리 실행하기 위한 옵션(-PnoKafka).
     if (project.hasProperty("noKafka")) {
-        exclude("**/AuditKafkaPipelineTest.class", "**/AuditKafkaDltTest.class")
+        exclude("**/OrderEventKafkaPipelineTest.class", "**/OrderEventKafkaDltTest.class")
     }
 }
