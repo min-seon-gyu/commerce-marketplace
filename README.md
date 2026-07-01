@@ -18,6 +18,7 @@
 | **보상 트랜잭션** | 주문 취소·라인 단위 부분환불을 삭제/수정이 아니라 역분개 + 재고 복원 + 포인트 (부분) 역적립으로 처리. | `OrderService.cancelOrder / refundLines` |
 | **주문 이행 워크플로우** | 결제→배송(발송·배송완료)→반품 클레임(운영자 승인) 상태머신. 취소는 발송 전만, 환불은 반품 승인으로만 게이트해 워크플로우 우회를 차단. | `ShippingService`, `ReturnClaimService` |
 | **정산 자동화** | 판매자별 주문 라인을 주기별 합산. Spring Batch로 대량 결산 자동화. | `SettlementService`, `SettlementBatchConfig` |
+| **성능 최적화(실증)** | 체크아웃 fan-out N+1 제거(2N→2), 쿠폰 한도 복합 인덱스·정산 커버링 인덱스. 동일 데이터 인덱스 on/off + SQL 문 카운트로 재현 검증. | `CheckoutQueryCountTest`, `IndexBenchmarkTest` |
 
 ---
 
@@ -194,6 +195,7 @@ Testcontainers(MySQL + Redis) 위에서 `IntegrationTestSupport` / `TestFixtures
 | **멱등성** | 같은 키로 10 동시 체크아웃 → 주문 정확히 1건 + 재고 1개만 차감, 재시도 시 201 보존 |
 | **이벤트** | 주문 결제 → Outbox → Kafka → 소비자 → `order_event_log`, 파싱 실패 → DLT 라우팅, 재조정 재적용 |
 | **재무** | 복식부기 2행·글로벌 균형, 쿠폰 할인 split 분개(판매자 gross 보전), 부분환불 배분 합 정확, 포인트 적립/취소 정합성 |
+| **성능** | 체크아웃 N+1 상수 쿼리(문 카운트), 복합·커버링 인덱스 실측(동일 데이터 인덱스 on/off, EXPLAIN) |
 
 ---
 
@@ -202,3 +204,4 @@ Testcontainers(MySQL + Redis) 위에서 `IntegrationTestSupport` / `TestFixtures
 - [`docs/01-domain-design.md`](docs/01-domain-design.md) — 도메인 모델 · 상태머신 · 불변식
 - [`docs/02-architecture-decisions.md`](docs/02-architecture-decisions.md) — 아키텍처 결정 · 트러블슈팅
 - [`docs/03-financial-design.md`](docs/03-financial-design.md) — 복식부기 원장 · 계정 · 분개
+- [`docs/04-performance.md`](docs/04-performance.md) — 성능 최적화 실증(N+1 · 인덱스 벤치마크)

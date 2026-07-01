@@ -75,11 +75,13 @@ class OrderService(
         val items = cartService.getItems(memberId)
         if (items.isEmpty()) throw BusinessException(ErrorCode.CART_EMPTY)
 
+        // N+1 방지: 카트 항목별 findById(sku)+findById(product) 대신 IN 조회 2건으로 일괄 로드.
+        val skusById = skuRepository.findAllById(items.map { it.skuId }).associateBy { it.id }
+        val productsById = productRepository
+            .findAllById(skusById.values.map { it.productId }.distinct()).associateBy { it.id }
         val specs = items.map { item ->
-            val sku = skuRepository.findById(item.skuId)
-                .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
-            val product = productRepository.findById(sku.productId)
-                .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
+            val sku = skusById[item.skuId] ?: throw BusinessException(ErrorCode.ENTITY_NOT_FOUND)
+            val product = productsById[sku.productId] ?: throw BusinessException(ErrorCode.ENTITY_NOT_FOUND)
             if (product.status != ProductStatus.ON_SALE) throw BusinessException(ErrorCode.PRODUCT_NOT_ON_SALE)
             LineSpec(sku.id, product.sellerId, item.quantity, sku.price)
         }
