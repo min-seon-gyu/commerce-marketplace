@@ -8,6 +8,7 @@ import com.commerce.ledger.application.LedgerService
 import com.commerce.ledger.application.LedgerVerificationService
 import com.commerce.ledger.domain.LedgerEntrySide
 import com.commerce.ledger.infrastructure.LedgerJpaRepository
+import com.commerce.order.application.OrderService
 import com.commerce.seller.application.SettlementService
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
@@ -35,6 +36,7 @@ class E2EFlowTest : IntegrationTestSupport() {
     @Autowired lateinit var refundService: VoucherRefundService
     @Autowired lateinit var withdrawalService: VoucherWithdrawalService
     @Autowired lateinit var cancelService: TransactionCancelService
+    @Autowired lateinit var orderService: OrderService
     @Autowired lateinit var settlementService: SettlementService
     @Autowired lateinit var verificationService: LedgerVerificationService
     @Autowired lateinit var voucherRepository: VoucherJpaRepository
@@ -174,15 +176,14 @@ class E2EFlowTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `settlement should calculate redemptions minus cancellations`() {
-        // 발행 + 3건 결제
-        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r1 = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
-        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
-        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
+    fun `settlement should calculate order sales minus cancellations`() {
+        // 3건 주문(각 10,000)
+        val o1 = fixtures.sellerSale(memberId, sellerId, BigDecimal("10000"))
+        fixtures.sellerSale(memberId, sellerId, BigDecimal("10000"))
+        fixtures.sellerSale(memberId, sellerId, BigDecimal("10000"))
 
         // 1건 취소
-        cancelService.cancel(r1.transactionId)
+        orderService.cancelOrder(memberId, o1.id)
 
         // 정산: 30,000 - 10,000 = 20,000
         val today = LocalDate.now()

@@ -1,13 +1,12 @@
 package com.commerce.integration
 
+import com.commerce.order.application.OrderService
 import com.commerce.seller.application.SettlementService
 import com.commerce.seller.domain.SettlementStatus
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
-import com.commerce.transaction.application.TransactionCancelService
 import com.commerce.transaction.domain.TransactionType
 import com.commerce.transaction.infrastructure.TransactionJpaRepository
-import com.commerce.voucher.application.VoucherRedemptionService
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -24,9 +23,8 @@ class SettlementConfirmTest : IntegrationTestSupport() {
 
     @Autowired lateinit var fixtures: TestFixtures
     @Autowired lateinit var settlementService: SettlementService
-    @Autowired lateinit var redemptionService: VoucherRedemptionService
+    @Autowired lateinit var orderService: OrderService
     @Autowired lateinit var transactionRepository: TransactionJpaRepository
-    @Autowired lateinit var cancelService: TransactionCancelService
 
     private var regionId: Long = 0
     private var memberId: Long = 0
@@ -60,8 +58,7 @@ class SettlementConfirmTest : IntegrationTestSupport() {
 
     @Test
     fun `confirm a non-zero settlement creates a SETTLEMENT transaction`() {
-        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
+        fixtures.sellerSale(memberId, sellerId, BigDecimal("10000")) // PAID 주문 → 판매자 매출 10000
 
         val (start, end) = monthRange()
         val settlement = settlementService.calculate(sellerId, start, end)
@@ -75,20 +72,19 @@ class SettlementConfirmTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `confirm recomputes total excluding redemptions cancelled after calculate`() {
-        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
+    fun `confirm recomputes total excluding orders cancelled after calculate`() {
+        val order = fixtures.sellerSale(memberId, sellerId, BigDecimal("10000"))
 
         val (start, end) = monthRange()
         val settlement = settlementService.calculate(sellerId, start, end)
         settlement.totalAmount.compareTo(BigDecimal("10000")) shouldBe 0 // calculate 시점 스냅샷
 
-        // PENDING 창에서 결제 취소(아직 CONFIRMED 아님 → settled-가드 통과)
-        cancelService.cancel(r.transactionId)
+        // PENDING 창에서 주문 취소 → 확정 재계산에서 제외되어야 한다.
+        orderService.cancelOrder(memberId, order.id)
 
         val confirmed = settlementService.confirm(settlement.id)
 
-        // 확정 시 재계산으로 취소된 결제분이 제외되어 과지급되지 않는다.
+        // 확정 시 재계산으로 취소된 주문분이 제외되어 과지급되지 않는다.
         confirmed.totalAmount.compareTo(BigDecimal.ZERO) shouldBe 0
         confirmed.status shouldBe SettlementStatus.CONFIRMED
     }

@@ -3,7 +3,6 @@ package com.commerce.integration
 import com.commerce.seller.application.SettlementService
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
-import com.commerce.voucher.application.VoucherRedemptionService
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -19,21 +18,19 @@ class SettlementPeriodTest : IntegrationTestSupport() {
 
     @Autowired lateinit var fixtures: TestFixtures
     @Autowired lateinit var settlementService: SettlementService
-    @Autowired lateinit var redemptionService: VoucherRedemptionService
 
-    private fun setupAndRedeem(settlementPeriod: String, amount: BigDecimal): Long {
+    private fun setupAndSell(settlementPeriod: String, amount: BigDecimal): Long {
         val region = fixtures.createRegion(settlementPeriod = settlementPeriod)
         val owner = fixtures.createMember()
         val seller = fixtures.createSeller(region, owner)
-        val member = fixtures.createMember()
-        val voucher = fixtures.issueVoucher(member.id, region.id, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, seller.id, amount)
+        val buyer = fixtures.createMember()
+        fixtures.sellerSale(buyer.id, seller.id, amount) // PAID 주문 1건 → 판매자 매출 amount
         return seller.id
     }
 
     @Test
     fun `monthly settlement period spans first to last day of reference month`() {
-        val sellerId = setupAndRedeem("MONTHLY", BigDecimal("10000"))
+        val sellerId = setupAndSell("MONTHLY", BigDecimal("10000"))
         val today = LocalDate.now()
 
         val settlement = settlementService.calculateForPeriod(sellerId, today)
@@ -45,7 +42,7 @@ class SettlementPeriodTest : IntegrationTestSupport() {
 
     @Test
     fun `weekly settlement period spans monday to sunday of reference week`() {
-        val sellerId = setupAndRedeem("WEEKLY", BigDecimal("7000"))
+        val sellerId = setupAndSell("WEEKLY", BigDecimal("7000"))
         val today = LocalDate.now()
 
         val settlement = settlementService.calculateForPeriod(sellerId, today)
@@ -57,7 +54,7 @@ class SettlementPeriodTest : IntegrationTestSupport() {
 
     @Test
     fun `daily settlement period is the single reference day`() {
-        val sellerId = setupAndRedeem("DAILY", BigDecimal("5000"))
+        val sellerId = setupAndSell("DAILY", BigDecimal("5000"))
         val today = LocalDate.now()
 
         val settlement = settlementService.calculateForPeriod(sellerId, today)
