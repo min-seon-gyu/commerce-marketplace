@@ -75,7 +75,7 @@ class OrderService(
         val items = cartService.getItems(memberId)
         if (items.isEmpty()) throw BusinessException(ErrorCode.CART_EMPTY)
 
-        // N+1 방지: 카트 항목별 findById(sku)+findById(product) 대신 IN 조회 2건으로 일괄 로드.
+            // N+1 방지: 카트 항목별 findById(sku)+findById(product) 대신 IN 조회 2건으로 일괄 로드.
         val skusById = skuRepository.findAllById(items.map { it.skuId }).associateBy { it.id }
         val productsById = productRepository
             .findAllById(skusById.values.map { it.productId }.distinct()).associateBy { it.id }
