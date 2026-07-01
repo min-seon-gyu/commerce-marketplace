@@ -24,6 +24,7 @@ import com.commerce.promotion.domain.CouponStatus
 import com.commerce.promotion.infrastructure.CouponJpaRepository
 import com.commerce.promotion.infrastructure.PromotionBudgetManager
 import com.commerce.promotion.infrastructure.PromotionJpaRepository
+import com.commerce.shipping.application.ShippingService
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
 import org.springframework.context.ApplicationEventPublisher
@@ -62,6 +63,7 @@ class OrderService(
     private val couponRepository: CouponJpaRepository,
     private val promotionRepository: PromotionJpaRepository,
     private val budgetManager: PromotionBudgetManager,
+    private val shippingService: ShippingService,
     private val transactionTemplate: TransactionTemplate,
     private val eventPublisher: ApplicationEventPublisher,
 ) {
@@ -119,6 +121,8 @@ class OrderService(
 
                     // 포인트는 실결제액(T−D) 기준 적립
                     pointEarnService.earn(memberId, paid, tx.id)
+                    // 배송 생성(PREPARING) — 주문과 원자적으로. 반품 클레임은 배송완료 이후에만 허용된다.
+                    shippingService.createForOrder(order.id)
                     cartService.clear(memberId)
                     // 주문 이벤트 발행 → OrderOutboxRecorder(BEFORE_COMMIT)가 같은 tx에서 outbox 캡처(원자적)
                     eventPublisher.publishEvent(OrderPlacedEvent(order.id, memberId, total))
@@ -162,6 +166,8 @@ class OrderService(
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
         if (order.memberId != requesterMemberId) throw BusinessException(ErrorCode.ACCESS_DENIED)
         if (order.status != OrderStatus.PAID) throw BusinessException(ErrorCode.ORDER_NOT_CANCELLABLE)
+        // 발송된 주문은 셀프 취소 불가 — 배송완료 후에는 반품 클레임(운영자 승인)으로만 환불된다.
+        if (shippingService.isShipped(orderId)) throw BusinessException(ErrorCode.ORDER_NOT_CANCELLABLE)
         val lines = orderLineRepository.findByOrderId(orderId)
 
         return stockLockManager.withStockLocks(lines.map { it.skuId }) {
@@ -213,8 +219,15 @@ class OrderService(
      * 결정적으로 계산되므로 여러 번의 부분환불이 누적돼도 합계가 원 할인 D·원 적립 P와 정확히 일치한다.
      * 모든 라인이 환불되면 REFUNDED, 일부면 PARTIALLY_REFUNDED로 전이한다.
      * (쿠폰/예산은 소진 상태를 유지한다 — 단일 사용 쿠폰이 환불로 되살아나지 않도록 하는 의도적 단순화.)
+     *
+     * @param afterRefundInTx 환불과 **같은 트랜잭션**에서 실행할 후처리(예: 반품 클레임 COMPLETED 전이). 원자적 커밋을 보장한다.
      */
-    fun refundLines(requesterMemberId: Long, orderId: Long, lineIds: List<Long>): Order {
+    fun refundLines(
+        requesterMemberId: Long,
+        orderId: Long,
+        lineIds: List<Long>,
+        afterRefundInTx: () -> Unit = {},
+    ): Order {
         if (lineIds.isEmpty()) throw BusinessException(ErrorCode.INVALID_REFUND_LINES)
         val order = orderRepository.findById(orderId)
             .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
@@ -276,6 +289,7 @@ class OrderService(
 
                 o.applyRefund(refundGross) // 누적 환불액 갱신 → REFUNDED/PARTIALLY_REFUNDED 결정(동시 환불은 @Version으로 직렬화)
                 eventPublisher.publishEvent(OrderRefundedEvent(o.id, requesterMemberId, refundNet, o.status == OrderStatus.REFUNDED))
+                afterRefundInTx() // 같은 tx에서 호출자 후처리(반품 클레임 완료 등)
                 o
             }!!
         }

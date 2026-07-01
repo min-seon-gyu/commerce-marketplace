@@ -40,6 +40,14 @@ enum class ErrorCode(
     ORDER_LINE_ALREADY_REFUNDED(HttpStatus.BAD_REQUEST, "이미 환불된 주문 라인입니다"),
     INVALID_REFUND_LINES(HttpStatus.BAD_REQUEST, "환불 대상 라인이 유효하지 않습니다"),
 
+    // Shipping / Return claim
+    SHIPMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "배송 정보를 찾을 수 없습니다"),
+    RETURN_CLAIM_NOT_FOUND(HttpStatus.NOT_FOUND, "반품 클레임을 찾을 수 없습니다"),
+    RETURN_NOT_ALLOWED(HttpStatus.BAD_REQUEST, "배송완료 후에만 반품할 수 있습니다"),
+    CLAIM_NOT_PENDING(HttpStatus.BAD_REQUEST, "처리할 수 없는 클레임 상태입니다"),
+    INVALID_CLAIM_LINES(HttpStatus.BAD_REQUEST, "반품 대상 라인이 유효하지 않습니다"),
+    LINE_ALREADY_IN_CLAIM(HttpStatus.BAD_REQUEST, "이미 진행 중인 반품 클레임에 포함된 라인입니다"),
+
     // Ledger
     LEDGER_IMBALANCE_DETECTED(HttpStatus.INTERNAL_SERVER_ERROR, "원장 정합성 오류가 감지되었습니다"),
     MANUAL_ADJUSTMENT_REQUIRES_ADMIN(HttpStatus.FORBIDDEN, "수동 원장 조정은 관리자 승인이 필요합니다"),
