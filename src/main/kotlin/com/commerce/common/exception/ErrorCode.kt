@@ -37,6 +37,10 @@ enum class ErrorCode(
     // Transaction
     TRANSACTION_NOT_CANCELLABLE(HttpStatus.BAD_REQUEST, "취소할 수 없는 거래입니다"),
 
+    // Product / Inventory
+    DUPLICATE_SKU_CODE(HttpStatus.CONFLICT, "이미 존재하는 SKU 코드입니다"),
+    OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "재고가 부족합니다"),
+
     // Ledger
     LEDGER_IMBALANCE_DETECTED(HttpStatus.INTERNAL_SERVER_ERROR, "원장 정합성 오류가 감지되었습니다"),
     MANUAL_ADJUSTMENT_REQUIRES_ADMIN(HttpStatus.FORBIDDEN, "수동 원장 조정은 관리자 승인이 필요합니다"),

@@ -55,6 +55,8 @@ class SecurityConfig(
                 it.requestMatchers("/api/v1/me").authenticated()
                 // 판매자 등록: 인증 필수 + 컨트롤러에서 ownerId를 JWT 주체로 강제(본인 판매자만).
                 it.requestMatchers(HttpMethod.POST, "/api/v1/sellers").authenticated()
+                // 상품 등록/판매개시: 인증 필수 + 서비스에서 판매자 소유주(JWT 주체) 강제. GET 조회는 공개.
+                it.requestMatchers(HttpMethod.POST, "/api/v1/products", "/api/v1/products/*/on-sale").authenticated()
                 // 상품권 자금 이동 엔드포인트: 인증 필수 + 컨트롤러에서 JWT 주체로 소유권 검증.
                 it.requestMatchers(
                     HttpMethod.POST,
