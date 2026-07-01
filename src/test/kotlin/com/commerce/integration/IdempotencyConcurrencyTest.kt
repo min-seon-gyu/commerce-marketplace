@@ -1,12 +1,11 @@
 package com.commerce.integration
 
+import com.commerce.cart.application.CartService
 import com.commerce.config.JwtTokenProvider
+import com.commerce.inventory.application.StockService
+import com.commerce.order.infrastructure.OrderJpaRepository
 import com.commerce.support.TestFixtures
-import com.commerce.transaction.domain.TransactionStatus
-import com.commerce.transaction.infrastructure.TransactionJpaRepository
-import com.commerce.voucher.infrastructure.VoucherJpaRepository
 import io.kotest.matchers.shouldBe
-import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -58,46 +57,33 @@ class IdempotencyConcurrencyTest {
 
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var fixtures: TestFixtures
+    @Autowired lateinit var cartService: CartService
+    @Autowired lateinit var stockService: StockService
+    @Autowired lateinit var orderRepository: OrderJpaRepository
     @Autowired lateinit var jwtTokenProvider: JwtTokenProvider
-    @Autowired lateinit var voucherRepository: VoucherJpaRepository
-    @Autowired lateinit var transactionRepository: TransactionJpaRepository
-
-    private var regionId: Long = 0
-    private var memberId: Long = 0
-    private var sellerId: Long = 0
-
-    @BeforeEach
-    fun setup() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
-        val member = fixtures.createMember()
-        val sellerOwner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, sellerOwner)
-        regionId = region.id
-        memberId = member.id
-        sellerId = seller.id
-    }
 
     /**
-     * 같은 Idempotency-Key로 동시에 여러 번 결제 요청이 들어와도,
-     * 멱등성은 "정확히 1회"만 처리되도록 보장해야 한다.
-     * (현재 구현은 preHandle 통과 후 처리하므로 동시 요청이 모두 통과 → 이중 차감)
+     * 같은 Idempotency-Key로 동시에 여러 번 체크아웃 요청이 들어와도, 멱등성은 "정확히 1회"만 처리해야 한다.
+     * (동시 요청이 모두 통과하면 이중 주문/이중 재고차감이 발생)
      */
     @Test
-    fun `same Idempotency-Key concurrent redeem should execute exactly once`() {
-        // given: 50,000원 상품권
-        val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
+    fun `same Idempotency-Key concurrent checkout should place exactly one order`() {
+        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val buyer = fixtures.createMember()
+        val skuId = fixtures.createOnSaleSku(seller.id, BigDecimal("50000"), 5)
+        cartService.addItem(buyer.id, skuId, 1)
+
         val idempotencyKey = UUID.randomUUID().toString()
         val threadCount = 10
-
         val headers = HttpHeaders().apply {
             contentType = MediaType.APPLICATION_JSON
             set("Idempotency-Key", idempotencyKey)
-            set("Authorization", "Bearer ${jwtTokenProvider.generateToken(memberId, "USER")}")
+            set("Authorization", "Bearer ${jwtTokenProvider.generateToken(buyer.id, "USER")}")
         }
-        val request = HttpEntity("""{"sellerId": $sellerId, "amount": 10000}""", headers)
-        val url = "/api/v1/vouchers/${voucher.id}/redeem"
+        val request = HttpEntity<Void>(headers)
+        val url = "/api/v1/orders"
 
-        // when: 동일 멱등키로 10건 동시 결제 시도
         val latch = CountDownLatch(1)
         val executor = Executors.newFixedThreadPool(threadCount)
         val success2xx = AtomicInteger(0)
@@ -112,14 +98,8 @@ class IdempotencyConcurrencyTest {
         futures.forEach { it.get() }
         executor.shutdown()
 
-        // then: 멱등키가 같으므로 단 1회(10,000원)만 차감되어 잔액 40,000원이어야 함
-        val updated = voucherRepository.findById(voucher.id).get()
-        updated.balance.compareTo(BigDecimal("40000")) shouldBe 0
-
-        // 완료 거래 = 발행 1건 + 결제 1건 = 2건 (이중 처리면 결제가 여러 건으로 늘어남)
-        val completedTxCount = transactionRepository.countByVoucherIdAndStatus(
-            voucher.id, TransactionStatus.COMPLETED
-        )
-        completedTxCount shouldBe 2
+        // 멱등키가 같으므로 주문은 정확히 1건만 생성되고 재고는 1개만 차감되어야 한다.
+        orderRepository.findByMemberId(buyer.id).size shouldBe 1
+        stockService.getBySkuId(skuId).quantity shouldBe 4
     }
 }
