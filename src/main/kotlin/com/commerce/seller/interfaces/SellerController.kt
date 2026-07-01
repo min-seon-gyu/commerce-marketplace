@@ -13,7 +13,7 @@ data class SellerResponse(
     val name: String,
     val businessNumber: String,
     val category: String,
-    val regionId: Long,
+    val settlementPeriod: String,
     val status: String,
 ) {
     companion object {
@@ -22,7 +22,7 @@ data class SellerResponse(
             name = m.name,
             businessNumber = m.businessNumber,
             category = m.category.name,
-            regionId = m.region.id,
+            settlementPeriod = m.settlementPeriod.name,
             status = m.status.name,
         )
     }

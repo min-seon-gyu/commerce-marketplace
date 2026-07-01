@@ -30,10 +30,9 @@ class PointEarnIntegrationTest : IntegrationTestSupport() {
 
     @BeforeEach
     fun setup() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         memberId = member.id
         sellerId = seller.id
     }

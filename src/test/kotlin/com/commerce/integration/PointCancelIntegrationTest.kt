@@ -40,9 +40,8 @@ class PointCancelIntegrationTest : IntegrationTestSupport() {
 
     @BeforeEach
     fun setup() {
-        val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember())
         memberId = member.id
         sellerId = seller.id
     }

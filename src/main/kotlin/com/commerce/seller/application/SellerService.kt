@@ -5,11 +5,11 @@ import com.commerce.common.exception.ErrorCode
 import com.commerce.member.application.MemberService
 import com.commerce.seller.domain.Seller
 import com.commerce.seller.domain.SellerCategory
+import com.commerce.seller.domain.SettlementPeriod
 import com.commerce.seller.domain.event.SellerApprovedEvent
 import com.commerce.seller.domain.event.SellerRejectedEvent
 import com.commerce.seller.domain.event.SellerTerminatedEvent
 import com.commerce.seller.infrastructure.SellerJpaRepository
-import com.commerce.region.application.RegionService
 import org.springframework.context.ApplicationEventPublisher
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
@@ -18,7 +18,7 @@ data class RegisterSellerRequest(
     val name: String,
     val businessNumber: String,
     val category: String,
-    val regionId: Long,
+    val settlementPeriod: String,
     val ownerId: Long,
 )
 
@@ -26,14 +26,12 @@ data class RegisterSellerRequest(
 @Transactional(readOnly = true)
 class SellerService(
     private val sellerRepository: SellerJpaRepository,
-    private val regionService: RegionService,
     private val memberService: MemberService,
     private val eventPublisher: ApplicationEventPublisher,
 ) {
 
     @Transactional
     fun register(request: RegisterSellerRequest): Seller {
-        val region = regionService.getById(request.regionId)
         val owner = memberService.getById(request.ownerId)
         memberService.promoteToSellerOwner(owner.id)
 
@@ -42,7 +40,7 @@ class SellerService(
                 name = request.name,
                 businessNumber = request.businessNumber,
                 category = SellerCategory.valueOf(request.category),
-                region = region,
+                settlementPeriod = SettlementPeriod.valueOf(request.settlementPeriod),
                 owner = owner,
             )
         )
@@ -52,7 +50,7 @@ class SellerService(
     fun approve(sellerId: Long): Seller {
         val seller = getById(sellerId)
         seller.approve()
-        eventPublisher.publishEvent(SellerApprovedEvent(seller.id, seller.region.id))
+        eventPublisher.publishEvent(SellerApprovedEvent(seller.id))
         return seller
     }
 
@@ -60,7 +58,7 @@ class SellerService(
     fun reject(sellerId: Long): Seller {
         val seller = getById(sellerId)
         seller.reject()
-        eventPublisher.publishEvent(SellerRejectedEvent(seller.id, seller.region.id))
+        eventPublisher.publishEvent(SellerRejectedEvent(seller.id))
         return seller
     }
 
@@ -82,7 +80,7 @@ class SellerService(
     fun terminate(sellerId: Long): Seller {
         val seller = getById(sellerId)
         seller.terminate()
-        eventPublisher.publishEvent(SellerTerminatedEvent(seller.id, seller.region.id))
+        eventPublisher.publishEvent(SellerTerminatedEvent(seller.id))
         return seller
     }
 

@@ -45,9 +45,8 @@ class PointControllerAuthorizationTest : IntegrationTestSupport() {
     fun `own points returns 200 with balance and history`() {
         // Use the real earn path so the POINT_BALANCE/POINT_FUNDING ledger legs are posted
         // atomically with the PointAccount update — keeping the global invariant intact.
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         val member = fixtures.createMember()
         // 주문 결제 50,000 × 1% 적립 = 500 포인트 (원장 POINT 2-leg 원자 기록)
         fixtures.sellerSale(member.id, seller.id, BigDecimal("50000"))

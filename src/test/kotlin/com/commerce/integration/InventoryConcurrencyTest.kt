@@ -30,9 +30,8 @@ class InventoryConcurrencyTest : IntegrationTestSupport() {
 
     @Test
     fun `concurrent deductions on same sku should not oversell`() {
-        val region = fixtures.createRegion()
         val owner = fixtures.createMember()
-        val seller = fixtures.createSeller(region, owner)
+        val seller = fixtures.createSeller(owner)
         val product = productService.createProduct(
             owner.id, seller.id, "한정판 조명", null, ProductCategory.LIGHTING,
             listOf(SkuSpec("LAMP-LTD-${owner.id}", "단일", emptyMap(), BigDecimal("59000"), 5)),

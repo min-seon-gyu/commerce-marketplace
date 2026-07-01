@@ -36,8 +36,7 @@ class OrderEventKafkaPipelineTest : IntegrationTestSupport() {
 
     @Test
     fun `order placed event flows outbox to kafka to order event log`() {
-        val region = fixtures.createRegion()
-        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember())
         val buyer = fixtures.createMember()
 
         val order = fixtures.sellerSale(buyer.id, seller.id, BigDecimal("10000")) // → ORDER_PLACED (outbox 캡처)

@@ -15,8 +15,6 @@ enum class ErrorCode(
     UNAUTHORIZED(HttpStatus.UNAUTHORIZED, "인증이 필요합니다"),
 
     // Region
-    REGION_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "운영 중인 지자체가 아닙니다"),
-    REGION_MONTHLY_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "지자체 월 발행한도를 초과했습니다"),
 
     // Member
     MEMBER_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "활성 상태의 회원이 아닙니다"),

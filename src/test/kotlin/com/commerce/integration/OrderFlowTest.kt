@@ -44,12 +44,11 @@ class OrderFlowTest : IntegrationTestSupport() {
 
     @Test
     fun `place multi-seller order then cancel restores stock, ledger and points`() {
-        val region = fixtures.createRegion()
         val buyer = fixtures.createMember()
         val ownerA = fixtures.createMember()
         val ownerB = fixtures.createMember()
-        val sellerA = fixtures.createSeller(region, ownerA)
-        val sellerB = fixtures.createSeller(region, ownerB)
+        val sellerA = fixtures.createSeller(ownerA)
+        val sellerB = fixtures.createSeller(ownerB)
 
         val skuA = onSaleSku(ownerA.id, sellerA.id, "의자", "CHAIR-${ownerA.id}", "50000", 10)
         val skuB = onSaleSku(ownerB.id, sellerB.id, "조명", "LAMP-${ownerB.id}", "30000", 5)
