@@ -19,7 +19,6 @@ class TransactionService(
     fun create(
         type: TransactionType,
         amount: BigDecimal,
-        voucherId: Long? = null,
         sellerId: Long? = null,
         memberId: Long? = null,
         originalTransactionId: Long? = null,
@@ -28,7 +27,6 @@ class TransactionService(
             Transaction(
                 type = type,
                 amount = amount,
-                voucherId = voucherId,
                 sellerId = sellerId,
                 memberId = memberId,
                 originalTransactionId = originalTransactionId,

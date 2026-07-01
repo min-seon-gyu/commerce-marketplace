@@ -10,7 +10,6 @@ import java.math.BigDecimal
 @Table(
     name = "transactions",
     indexes = [
-        Index(name = "idx_tx_voucher", columnList = "voucherId, createdAt"),
         Index(name = "idx_tx_seller_period", columnList = "sellerId, status, createdAt"),
     ]
 )
@@ -22,7 +21,6 @@ class Transaction(
     @Column(nullable = false, precision = 15, scale = 2)
     val amount: BigDecimal,
 
-    val voucherId: Long? = null,
     val sellerId: Long? = null,
     val memberId: Long? = null,
     val originalTransactionId: Long? = null,

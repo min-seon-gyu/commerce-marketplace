@@ -16,14 +16,4 @@ interface LedgerJpaRepository : JpaRepository<LedgerEntry, Long> {
 
     @Query("SELECT COALESCE(SUM(e.amount), 0) FROM LedgerEntry e WHERE e.side = :side")
     fun sumBySide(side: LedgerEntrySide): BigDecimal
-
-    @Query("""
-        SELECT COALESCE(SUM(CASE WHEN e.side = 'DEBIT' THEN e.amount ELSE 0 END), 0)
-             - COALESCE(SUM(CASE WHEN e.side = 'CREDIT' THEN e.amount ELSE 0 END), 0)
-        FROM LedgerEntry e
-        JOIN Transaction t ON e.transactionId = t.id
-        WHERE t.voucherId = :voucherId
-        AND e.account = :account
-    """)
-    fun netBalanceByVoucherAndAccount(voucherId: Long, account: AccountCode): BigDecimal
 }

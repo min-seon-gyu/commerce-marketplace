@@ -11,7 +11,7 @@ import java.util.concurrent.TimeUnit
 
 /**
  * SKU 재고 차감을 직렬화하는 분산락. Redisson 분산락을 1차로 시도하고, Redis 장애 시 DB 비관적 락만으로 fallback한다.
- * (voucher 결제의 검증된 락 패턴을 재고 도메인에 이식.)
+ * (분산락 1차 + DB 비관적 락 2차 이중 방어.)
  */
 @Component
 class StockLockManager(

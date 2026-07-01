@@ -36,7 +36,7 @@ data class SettlementResponse(
 /**
  * 정산 생성 요청.
  * - periodStart/periodEnd를 모두 주면 해당 명시 구간으로 계산한다.
- * - 비우면 판매자 소속 지자체의 정산 주기(일/주/월)에 맞춰 referenceDate(미지정 시 KST 오늘) 기준 구간을 산출한다.
+ * - 비우면 판매자의 정산 주기(일/주/월)에 맞춰 referenceDate(미지정 시 KST 오늘) 기준 구간을 산출한다.
  */
 data class CalculateSettlementRequest(
     val sellerId: Long,
