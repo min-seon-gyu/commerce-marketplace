@@ -25,14 +25,14 @@ class OutboxRecorderTest : IntegrationTestSupport() {
     @Autowired lateinit var outboxRepository: OutboxEventRepository
 
     private var regionId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -52,7 +52,7 @@ class OutboxRecorderTest : IntegrationTestSupport() {
     fun `critical events are never written to the outbox`() {
         val member = fixtures.createMember()
         val voucher = fixtures.issueVoucher(member.id, regionId, BigDecimal("50000")) // VOUCHER_ISSUED (CRITICAL)
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000")) // VOUCHER_REDEEMED (CRITICAL)
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000")) // VOUCHER_REDEEMED (CRITICAL)
 
         // OutboxRecorder는 CRITICAL을 건너뛴다(AuditEventListener가 동기 기록).
         outboxRepository.findAll().none { it.severity == AuditSeverity.CRITICAL } shouldBe true

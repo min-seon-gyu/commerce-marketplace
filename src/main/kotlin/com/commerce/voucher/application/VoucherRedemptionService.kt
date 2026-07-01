@@ -36,7 +36,7 @@ class VoucherRedemptionService(
      * 분산락 → 트랜잭션(커밋) → 분산락 해제 순서를 보장하여
      * 락 해제 후 다른 스레드가 커밋 전 데이터를 읽는 문제를 방지한다.
      */
-    fun redeem(voucherId: Long, merchantId: Long, amount: BigDecimal): RedemptionResult {
+    fun redeem(voucherId: Long, sellerId: Long, amount: BigDecimal): RedemptionResult {
         return lockManager.withVoucherLock(voucherId) {
             val timer = Timer.start(meterRegistry)
             try {
@@ -55,7 +55,7 @@ class VoucherRedemptionService(
                         type = TransactionType.REDEMPTION,
                         amount = amount,
                         voucherId = voucherId,
-                        merchantId = merchantId,
+                        sellerId = sellerId,
                     )
                     ledgerService.record(
                         debitAccount = AccountCode.MERCHANT_RECEIVABLE,
@@ -73,7 +73,7 @@ class VoucherRedemptionService(
                     )
 
                     eventPublisher.publishEvent(
-                        VoucherRedeemedEvent(voucherId, merchantId, amount, voucher.balance, tx.id, previousBalance)
+                        VoucherRedeemedEvent(voucherId, sellerId, amount, voucher.balance, tx.id, previousBalance)
                     )
 
                     RedemptionResult(transactionId = tx.id, remainingBalance = voucher.balance)

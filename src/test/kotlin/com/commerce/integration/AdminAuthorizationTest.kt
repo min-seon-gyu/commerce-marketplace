@@ -62,7 +62,7 @@ class AdminAuthorizationTest : IntegrationTestSupport() {
     fun `settlement calculate without token returns 401`() {
         mockMvc.post("/api/v1/settlements/calculate") {
             contentType = org.springframework.http.MediaType.APPLICATION_JSON
-            content = """{"merchantId": 1}"""
+            content = """{"sellerId": 1}"""
         }.andExpect { status { isUnauthorized() } }
     }
 
@@ -98,8 +98,8 @@ class AdminAuthorizationTest : IntegrationTestSupport() {
     }
 
     @Test
-    fun `merchant register without token returns 401`() {
-        mockMvc.post("/api/v1/merchants") {
+    fun `seller register without token returns 401`() {
+        mockMvc.post("/api/v1/sellers") {
             contentType = org.springframework.http.MediaType.APPLICATION_JSON
             content = "{}"
         }.andExpect { status { isUnauthorized() } }

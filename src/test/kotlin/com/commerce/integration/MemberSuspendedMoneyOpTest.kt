@@ -30,7 +30,7 @@ class MemberSuspendedMoneyOpTest : IntegrationTestSupport() {
     fun `suspended member cannot redeem even with a valid token`() {
         val region = fixtures.createRegion()
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         val voucher = fixtures.issueVoucher(member.id, region.id, BigDecimal("50000"))
 
         memberService.suspend(member.id) // ACTIVE → SUSPENDED
@@ -39,7 +39,7 @@ class MemberSuspendedMoneyOpTest : IntegrationTestSupport() {
         mockMvc.post("/api/v1/vouchers/${voucher.id}/redeem") {
             header("Authorization", "Bearer $token")
             contentType = MediaType.APPLICATION_JSON
-            content = """{"merchantId": ${merchant.id}, "amount": 10000}"""
+            content = """{"sellerId": ${seller.id}, "amount": 10000}"""
         }.andExpect {
             status { isBadRequest() }
             jsonPath("$.error.code") { value("MEMBER_NOT_ACTIVE") }

@@ -64,17 +64,17 @@ class IdempotencyConcurrencyTest {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchantOwner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, merchantOwner)
+        val sellerOwner = fixtures.createMember()
+        val seller = fixtures.createSeller(region, sellerOwner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     /**
@@ -94,7 +94,7 @@ class IdempotencyConcurrencyTest {
             set("Idempotency-Key", idempotencyKey)
             set("Authorization", "Bearer ${jwtTokenProvider.generateToken(memberId, "USER")}")
         }
-        val request = HttpEntity("""{"merchantId": $merchantId, "amount": 10000}""", headers)
+        val request = HttpEntity("""{"sellerId": $sellerId, "amount": 10000}""", headers)
         val url = "/api/v1/vouchers/${voucher.id}/redeem"
 
         // when: 동일 멱등키로 10건 동시 결제 시도

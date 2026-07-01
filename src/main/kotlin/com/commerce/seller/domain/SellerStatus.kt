@@ -1,5 +1,5 @@
-package com.commerce.merchant.domain
+package com.commerce.seller.domain
 
-enum class MerchantStatus {
+enum class SellerStatus {
     PENDING_APPROVAL, APPROVED, REJECTED, SUSPENDED, TERMINATED
 }

@@ -1,4 +1,4 @@
-package com.commerce.merchant.domain.event
+package com.commerce.seller.domain.event
 
 import com.commerce.common.domain.DomainEvent
 import java.math.BigDecimal
@@ -6,7 +6,7 @@ import java.time.LocalDate
 
 class SettlementConfirmedEvent(
     override val aggregateId: Long,
-    val merchantId: Long,
+    val sellerId: Long,
     val totalAmount: BigDecimal,
     val periodStart: LocalDate,
     val periodEnd: LocalDate,

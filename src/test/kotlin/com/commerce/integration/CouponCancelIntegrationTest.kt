@@ -44,16 +44,16 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -65,7 +65,7 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
         )
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
-        val result = orchestrator.redeem(voucher.id, merchantId, BigDecimal("10000"), coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, BigDecimal("10000"), coupon.id)
         budgetManager.consumed(promotion.id) shouldBe 3000L
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("43000")) shouldBe 0
 
@@ -165,7 +165,7 @@ class CouponCancelIntegrationTest : IntegrationTestSupport() {
         val coupon = fixtures.issueCoupon(promotion.id, memberId)
 
         // Redeem — voucherCharged = 0, 바우처 잔액 불변
-        val result = orchestrator.redeem(voucher.id, merchantId, orderTotal, coupon.id)
+        val result = orchestrator.redeem(voucher.id, sellerId, orderTotal, coupon.id)
         voucherRepository.findById(voucher.id).get().balance.compareTo(BigDecimal("50000")) shouldBe 0
         budgetManager.consumed(promotion.id) shouldBe 10000L
 

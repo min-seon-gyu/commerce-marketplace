@@ -14,13 +14,13 @@ interface TransactionJpaRepository : JpaRepository<Transaction, Long> {
 
     @Query("""
         SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t
-        WHERE t.merchantId = :merchantId
+        WHERE t.sellerId = :sellerId
         AND t.type = :type
         AND t.status = :status
         AND t.createdAt BETWEEN :start AND :end
     """)
-    fun sumAmountByMerchantAndTypeAndPeriod(
-        merchantId: Long,
+    fun sumAmountBySellerAndTypeAndPeriod(
+        sellerId: Long,
         type: TransactionType,
         status: TransactionStatus,
         start: LocalDateTime,

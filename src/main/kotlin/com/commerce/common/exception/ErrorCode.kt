@@ -22,8 +22,8 @@ enum class ErrorCode(
     MEMBER_NOT_ACTIVE(HttpStatus.BAD_REQUEST, "활성 상태의 회원이 아닙니다"),
     MEMBER_PURCHASE_LIMIT_EXCEEDED(HttpStatus.BAD_REQUEST, "1인 구매한도를 초과했습니다"),
 
-    // Merchant
-    MERCHANT_NOT_APPROVED(HttpStatus.BAD_REQUEST, "승인된 가맹점이 아닙니다"),
+    // Seller
+    SELLER_NOT_APPROVED(HttpStatus.BAD_REQUEST, "승인된 판매자이 아닙니다"),
     INVALID_STATE_TRANSITION(HttpStatus.BAD_REQUEST, "허용되지 않은 상태 전이입니다"),
 
     // Voucher

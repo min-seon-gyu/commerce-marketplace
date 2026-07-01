@@ -1,10 +1,10 @@
-package com.commerce.merchant.interfaces
+package com.commerce.seller.interfaces
 
 import com.commerce.common.api.ApiResponse
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
-import com.commerce.merchant.application.SettlementService
-import com.commerce.merchant.domain.Settlement
+import com.commerce.seller.application.SettlementService
+import com.commerce.seller.domain.Settlement
 import org.springframework.format.annotation.DateTimeFormat
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
@@ -13,7 +13,7 @@ import java.time.LocalDate
 
 data class SettlementResponse(
     val id: Long,
-    val merchantId: Long,
+    val sellerId: Long,
     val periodStart: LocalDate,
     val periodEnd: LocalDate,
     val totalAmount: BigDecimal,
@@ -23,7 +23,7 @@ data class SettlementResponse(
     companion object {
         fun from(s: Settlement) = SettlementResponse(
             id = s.id,
-            merchantId = s.merchantId,
+            sellerId = s.sellerId,
             periodStart = s.periodStart,
             periodEnd = s.periodEnd,
             totalAmount = s.totalAmount,
@@ -36,10 +36,10 @@ data class SettlementResponse(
 /**
  * 정산 생성 요청.
  * - periodStart/periodEnd를 모두 주면 해당 명시 구간으로 계산한다.
- * - 비우면 가맹점 소속 지자체의 정산 주기(일/주/월)에 맞춰 referenceDate(미지정 시 KST 오늘) 기준 구간을 산출한다.
+ * - 비우면 판매자 소속 지자체의 정산 주기(일/주/월)에 맞춰 referenceDate(미지정 시 KST 오늘) 기준 구간을 산출한다.
  */
 data class CalculateSettlementRequest(
-    val merchantId: Long,
+    val sellerId: Long,
     @field:DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     val periodStart: LocalDate? = null,
     @field:DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
@@ -65,11 +65,11 @@ class SettlementController(
         if ((request.periodStart == null) != (request.periodEnd == null))
             throw BusinessException(ErrorCode.INVALID_INPUT, "periodStart와 periodEnd는 함께 지정해야 합니다")
         val settlement = if (request.periodStart != null && request.periodEnd != null) {
-            settlementService.calculate(request.merchantId, request.periodStart, request.periodEnd)
+            settlementService.calculate(request.sellerId, request.periodStart, request.periodEnd)
         } else if (request.referenceDate != null) {
-            settlementService.calculateForPeriod(request.merchantId, request.referenceDate)
+            settlementService.calculateForPeriod(request.sellerId, request.referenceDate)
         } else {
-            settlementService.calculateForPeriod(request.merchantId)
+            settlementService.calculateForPeriod(request.sellerId)
         }
         return ApiResponse.ok(SettlementResponse.from(settlement))
     }

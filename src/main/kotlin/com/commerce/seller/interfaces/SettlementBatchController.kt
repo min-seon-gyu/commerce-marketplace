@@ -1,7 +1,7 @@
-package com.commerce.merchant.interfaces
+package com.commerce.seller.interfaces
 
 import com.commerce.common.api.ApiResponse
-import com.commerce.merchant.batch.SettlementBatchConfig
+import com.commerce.seller.batch.SettlementBatchConfig
 import org.springframework.batch.core.Job
 import org.springframework.batch.core.JobParametersBuilder
 import org.springframework.batch.core.launch.JobLauncher

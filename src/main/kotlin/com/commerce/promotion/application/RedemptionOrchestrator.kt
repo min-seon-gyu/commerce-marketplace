@@ -52,12 +52,12 @@ class RedemptionOrchestrator(
 ) {
 
     /**
-     * @param orderTotal 주문 총액 T (= 가맹점 수취 gross). 쿠폰 없으면 바우처 차감액과 동일.
+     * @param orderTotal 주문 총액 T (= 판매자 수취 gross). 쿠폰 없으면 바우처 차감액과 동일.
      * @param couponId 적용할 단일 쿠폰(없으면 일반 바우처 결제로 위임).
      */
-    fun redeem(voucherId: Long, merchantId: Long, orderTotal: BigDecimal, couponId: Long?): RedemptionResult {
+    fun redeem(voucherId: Long, sellerId: Long, orderTotal: BigDecimal, couponId: Long?): RedemptionResult {
         if (couponId == null) {
-            return redemptionService.redeem(voucherId, merchantId, orderTotal)
+            return redemptionService.redeem(voucherId, sellerId, orderTotal)
         }
         // 락 키 도출용 사전 조회(쿠폰의 promotionId·memberId). 본 검증은 락 내부에서 재수행한다.
         val couponMeta = couponRepository.findById(couponId)
@@ -66,7 +66,7 @@ class RedemptionOrchestrator(
         return lockManager.withPromotionMemberLock(couponMeta.promotionId, couponMeta.memberId) {
             lockManager.withCouponLock(couponId) {
                 lockManager.withVoucherLock(voucherId) {
-                    redeemWithCoupon(voucherId, merchantId, orderTotal, couponId)
+                    redeemWithCoupon(voucherId, sellerId, orderTotal, couponId)
                 }
             }
         }
@@ -74,7 +74,7 @@ class RedemptionOrchestrator(
 
     private fun redeemWithCoupon(
         voucherId: Long,
-        merchantId: Long,
+        sellerId: Long,
         orderTotal: BigDecimal,
         couponId: Long,
     ): RedemptionResult {
@@ -130,7 +130,7 @@ class RedemptionOrchestrator(
                     type = TransactionType.REDEMPTION,
                     amount = orderTotal,                 // gross T (정산 집계 기준)
                     voucherId = voucherId,
-                    merchantId = merchantId,
+                    sellerId = sellerId,
                     memberId = lockedCoupon.memberId,
                 )
 
@@ -185,7 +185,7 @@ class RedemptionOrchestrator(
                 eventPublisher.publishEvent(
                     VoucherRedeemedEvent(
                         aggregateId = voucherId,
-                        merchantId = merchantId,
+                        sellerId = sellerId,
                         amount = auditAmount,
                         remainingBalance = voucher.balance,
                         transactionId = tx.id,

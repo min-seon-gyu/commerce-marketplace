@@ -2,7 +2,7 @@ package com.commerce.integration
 
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
-import com.commerce.merchant.application.SettlementService
+import com.commerce.seller.application.SettlementService
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.application.TransactionCancelService
@@ -29,22 +29,22 @@ class TransactionCancelGuardTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion()
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
     fun `cannot cancel a non-redemption (compensating) transaction`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r = redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        val r = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
         val compensatingId = cancelService.cancel(r.transactionId)
 
         // 보상 거래(CANCELLATION)는 결제 거래가 아니므로 취소 불가
@@ -55,7 +55,7 @@ class TransactionCancelGuardTest : IntegrationTestSupport() {
     @Test
     fun `cannot cancel the same redemption twice`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r = redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        val r = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
         cancelService.cancel(r.transactionId)
 
         val ex = shouldThrow<BusinessException> { cancelService.cancel(r.transactionId) }
@@ -65,11 +65,11 @@ class TransactionCancelGuardTest : IntegrationTestSupport() {
     @Test
     fun `cannot cancel a settled redemption`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r = redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        val r = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
 
         val today = LocalDate.now()
         val settlement = settlementService.calculate(
-            merchantId, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())
+            sellerId, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth())
         )
         settlementService.confirm(settlement.id) // CONFIRMED — 결제 기간을 포함
 

@@ -12,9 +12,9 @@ class AuditEventTypePolicyTest {
     }
 
     @Test
-    fun `merchant and member lifecycle events are HIGH`() {
-        AuditEventTypePolicy.resolveSeverity("MERCHANT_REJECTED") shouldBe AuditSeverity.HIGH
-        AuditEventTypePolicy.resolveSeverity("MERCHANT_TERMINATED") shouldBe AuditSeverity.HIGH
+    fun `seller and member lifecycle events are HIGH`() {
+        AuditEventTypePolicy.resolveSeverity("SELLER_REJECTED") shouldBe AuditSeverity.HIGH
+        AuditEventTypePolicy.resolveSeverity("SELLER_TERMINATED") shouldBe AuditSeverity.HIGH
         AuditEventTypePolicy.resolveSeverity("MEMBER_SUSPENDED") shouldBe AuditSeverity.HIGH
         AuditEventTypePolicy.resolveSeverity("MEMBER_WITHDRAWN") shouldBe AuditSeverity.HIGH
         AuditEventTypePolicy.resolveSeverity("REGION_POLICY_CHANGED") shouldBe AuditSeverity.HIGH

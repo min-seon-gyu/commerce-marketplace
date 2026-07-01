@@ -14,7 +14,7 @@ data class TransactionResponse(
     val amount: BigDecimal,
     val status: String,
     val voucherId: Long?,
-    val merchantId: Long?,
+    val sellerId: Long?,
     val originalTransactionId: Long?,
 ) {
     companion object {
@@ -24,7 +24,7 @@ data class TransactionResponse(
             amount = t.amount,
             status = t.status.name,
             voucherId = t.voucherId,
-            merchantId = t.merchantId,
+            sellerId = t.sellerId,
             originalTransactionId = t.originalTransactionId,
         )
     }

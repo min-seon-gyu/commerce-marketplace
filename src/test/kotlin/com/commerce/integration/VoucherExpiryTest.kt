@@ -32,17 +32,17 @@ class VoucherExpiryTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
-        val merchantOwner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, merchantOwner)
+        val sellerOwner = fixtures.createMember()
+        val seller = fixtures.createSeller(region, sellerOwner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -62,7 +62,7 @@ class VoucherExpiryTest : IntegrationTestSupport() {
     @Test
     fun `should expire partially used voucher and move remaining balance`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("30000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("30000"))
         fixtures.forceExpireVoucher(voucher.id)
 
         expiryProcessor.processExpiry(voucher.id)
@@ -75,7 +75,7 @@ class VoucherExpiryTest : IntegrationTestSupport() {
     @Test
     fun `expired voucher ledger should be balanced`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("20000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("20000"))
         fixtures.forceExpireVoucher(voucher.id)
 
         expiryProcessor.processExpiry(voucher.id)

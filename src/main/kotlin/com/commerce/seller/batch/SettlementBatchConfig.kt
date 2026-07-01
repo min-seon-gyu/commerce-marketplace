@@ -1,11 +1,11 @@
-package com.commerce.merchant.batch
+package com.commerce.seller.batch
 
-import com.commerce.merchant.application.SettlementService
-import com.commerce.merchant.domain.Merchant
-import com.commerce.merchant.domain.MerchantStatus
-import com.commerce.merchant.domain.Settlement
-import com.commerce.merchant.domain.SettlementStatus
-import com.commerce.merchant.infrastructure.SettlementJpaRepository
+import com.commerce.seller.application.SettlementService
+import com.commerce.seller.domain.Seller
+import com.commerce.seller.domain.SellerStatus
+import com.commerce.seller.domain.Settlement
+import com.commerce.seller.domain.SettlementStatus
+import com.commerce.seller.infrastructure.SettlementJpaRepository
 import io.micrometer.core.instrument.MeterRegistry
 import jakarta.persistence.EntityManagerFactory
 import org.slf4j.LoggerFactory
@@ -32,7 +32,7 @@ import java.time.LocalDate
 /**
  * 결산 주기 일괄 정산 배치.
  *
- * 기준일(referenceDate) 파라미터로 **APPROVED 가맹점 전체**를 청크 처리하며, 각 가맹점의 소속 지자체 정산주기(일/주/월)에 맞춰
+ * 기준일(referenceDate) 파라미터로 **APPROVED 판매자 전체**를 청크 처리하며, 각 판매자의 소속 지자체 정산주기(일/주/월)에 맞춰
  * 해당 구간의 정산(PENDING)을 생성한다. 재실행 안전(멱등: 구간 중복 스킵 + unique 제약), 0원 스킵, 단건 실패 skip(격리)로
  * 대량 결산이 중단 없이 완주하도록 설계했다. 확정·원장분개·지급은 승인이 필요한 별도 액션으로 남긴다(정산 관행).
  *
@@ -64,27 +64,27 @@ class SettlementBatchConfig(
             .next(verifySettlementStep)
             .build()
 
-    /** APPROVED 가맹점을 id 순으로 페이징. 프로세서에선 id만 사용하므로 LAZY 연관 접근 없음. */
+    /** APPROVED 판매자을 id 순으로 페이징. 프로세서에선 id만 사용하므로 LAZY 연관 접근 없음. */
     @Bean
     @StepScope
-    fun approvedMerchantReader(): JpaPagingItemReader<Merchant> =
-        JpaPagingItemReaderBuilder<Merchant>()
-            .name("approvedMerchantReader")
+    fun approvedSellerReader(): JpaPagingItemReader<Seller> =
+        JpaPagingItemReaderBuilder<Seller>()
+            .name("approvedSellerReader")
             .entityManagerFactory(entityManagerFactory)
-            .queryString("SELECT m FROM Merchant m WHERE m.status = :status ORDER BY m.id ASC")
-            .parameterValues(mapOf<String, Any>("status" to MerchantStatus.APPROVED))
+            .queryString("SELECT m FROM Seller m WHERE m.status = :status ORDER BY m.id ASC")
+            .parameterValues(mapOf<String, Any>("status" to SellerStatus.APPROVED))
             .pageSize(CHUNK_SIZE)
             .build()
 
-    /** 가맹점별 정산(미저장)을 만든다. 중복/0원이면 null → Spring Batch가 filter로 집계하고 다음으로 진행. */
+    /** 판매자별 정산(미저장)을 만든다. 중복/0원이면 null → Spring Batch가 filter로 집계하고 다음으로 진행. */
     @Bean
     @StepScope
     fun settlementProcessor(
         @Value("#{jobParameters['referenceDate']}") referenceDate: String,
-    ): ItemProcessor<Merchant, Settlement> {
+    ): ItemProcessor<Seller, Settlement> {
         val ref = LocalDate.parse(referenceDate)
         // ItemProcessor.process는 @Nullable — null 반환 시 해당 아이템은 filter된다.
-        return ItemProcessor { merchant -> settlementService.buildSettlementForBatch(merchant.id, ref) }
+        return ItemProcessor { seller -> settlementService.buildSettlementForBatch(seller.id, ref) }
     }
 
     /** 생성된 정산을 일괄 저장. 청크 트랜잭션 안에서 실행된다. */
@@ -94,17 +94,17 @@ class SettlementBatchConfig(
 
     @Bean
     fun calculateSettlementStep(
-        approvedMerchantReader: JpaPagingItemReader<Merchant>,
-        settlementProcessor: ItemProcessor<Merchant, Settlement>,
+        approvedSellerReader: JpaPagingItemReader<Seller>,
+        settlementProcessor: ItemProcessor<Seller, Settlement>,
         settlementWriter: ItemWriter<Settlement>,
     ): Step =
         StepBuilder("calculateSettlementStep", jobRepository)
-            .chunk<Merchant, Settlement>(CHUNK_SIZE, transactionManager)
-            .reader(approvedMerchantReader)
+            .chunk<Seller, Settlement>(CHUNK_SIZE, transactionManager)
+            .reader(approvedSellerReader)
             .processor(settlementProcessor)
             .writer(settlementWriter)
             .faultTolerant()
-            .skip(Exception::class.java)   // 단건 가맹점 실패는 격리하고 결산 전체는 완주(운영 모니터링 대상)
+            .skip(Exception::class.java)   // 단건 판매자 실패는 격리하고 결산 전체는 완주(운영 모니터링 대상)
             .skipLimit(SKIP_LIMIT)
             .build()
 

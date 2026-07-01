@@ -20,7 +20,7 @@ class TransactionService(
         type: TransactionType,
         amount: BigDecimal,
         voucherId: Long? = null,
-        merchantId: Long? = null,
+        sellerId: Long? = null,
         memberId: Long? = null,
         originalTransactionId: Long? = null,
     ): Transaction {
@@ -29,7 +29,7 @@ class TransactionService(
                 type = type,
                 amount = amount,
                 voucherId = voucherId,
-                merchantId = merchantId,
+                sellerId = sellerId,
                 memberId = memberId,
                 originalTransactionId = originalTransactionId,
             )

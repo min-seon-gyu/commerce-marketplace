@@ -53,17 +53,17 @@ class PointEarnRollbackTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
         val member = fixtures.createMember()
         val owner = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, owner)
+        val seller = fixtures.createSeller(region, owner)
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     @Test
@@ -83,7 +83,7 @@ class PointEarnRollbackTest : IntegrationTestSupport() {
 
         // Act: redeem must propagate the exception
         assertThrows<Exception> {
-            redemptionService.redeem(voucher.id, merchantId, BigDecimal("20000"))
+            redemptionService.redeem(voucher.id, sellerId, BigDecimal("20000"))
         }
 
         // Assert ROLLBACK:

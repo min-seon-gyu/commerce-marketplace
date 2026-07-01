@@ -1,7 +1,7 @@
 package com.commerce.integration
 
-import com.commerce.merchant.application.SettlementService
-import com.commerce.merchant.domain.SettlementStatus
+import com.commerce.seller.application.SettlementService
+import com.commerce.seller.domain.SettlementStatus
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.application.TransactionCancelService
@@ -30,16 +30,16 @@ class SettlementConfirmTest : IntegrationTestSupport() {
 
     private var regionId: Long = 0
     private var memberId: Long = 0
-    private var merchantId: Long = 0
+    private var sellerId: Long = 0
 
     @BeforeEach
     fun setup() {
         val region = fixtures.createRegion()
         val member = fixtures.createMember()
-        val merchant = fixtures.createMerchant(region, fixtures.createMember())
+        val seller = fixtures.createSeller(region, fixtures.createMember())
         regionId = region.id
         memberId = member.id
-        merchantId = merchant.id
+        sellerId = seller.id
     }
 
     private fun monthRange(): Pair<LocalDate, LocalDate> {
@@ -50,7 +50,7 @@ class SettlementConfirmTest : IntegrationTestSupport() {
     @Test
     fun `confirm a zero-amount settlement succeeds without creating a transaction`() {
         val (start, end) = monthRange()
-        val settlement = settlementService.calculate(merchantId, start, end)
+        val settlement = settlementService.calculate(sellerId, start, end)
         settlement.totalAmount.compareTo(BigDecimal.ZERO) shouldBe 0
 
         val confirmed = settlementService.confirm(settlement.id)
@@ -61,26 +61,26 @@ class SettlementConfirmTest : IntegrationTestSupport() {
     @Test
     fun `confirm a non-zero settlement creates a SETTLEMENT transaction`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
 
         val (start, end) = monthRange()
-        val settlement = settlementService.calculate(merchantId, start, end)
+        val settlement = settlementService.calculate(sellerId, start, end)
         settlement.totalAmount.compareTo(BigDecimal("10000")) shouldBe 0
 
         val confirmed = settlementService.confirm(settlement.id)
 
         confirmed.status shouldBe SettlementStatus.CONFIRMED
         transactionRepository.findAll()
-            .any { it.type == TransactionType.SETTLEMENT && it.merchantId == merchantId } shouldBe true
+            .any { it.type == TransactionType.SETTLEMENT && it.sellerId == sellerId } shouldBe true
     }
 
     @Test
     fun `confirm recomputes total excluding redemptions cancelled after calculate`() {
         val voucher = fixtures.issueVoucher(memberId, regionId, BigDecimal("50000"))
-        val r = redemptionService.redeem(voucher.id, merchantId, BigDecimal("10000"))
+        val r = redemptionService.redeem(voucher.id, sellerId, BigDecimal("10000"))
 
         val (start, end) = monthRange()
-        val settlement = settlementService.calculate(merchantId, start, end)
+        val settlement = settlementService.calculate(sellerId, start, end)
         settlement.totalAmount.compareTo(BigDecimal("10000")) shouldBe 0 // calculate 시점 스냅샷
 
         // PENDING 창에서 결제 취소(아직 CONFIRMED 아님 → settled-가드 통과)

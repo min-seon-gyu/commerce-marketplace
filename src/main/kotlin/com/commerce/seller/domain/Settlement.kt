@@ -1,4 +1,4 @@
-package com.commerce.merchant.domain
+package com.commerce.seller.domain
 
 import com.commerce.common.domain.BaseEntity
 import com.commerce.common.exception.BusinessException
@@ -15,12 +15,12 @@ enum class SettlementStatus {
 @Table(
     name = "settlements",
     uniqueConstraints = [
-        UniqueConstraint(name = "uk_settlement_period", columnNames = ["merchantId", "periodStart", "periodEnd"])
+        UniqueConstraint(name = "uk_settlement_period", columnNames = ["sellerId", "periodStart", "periodEnd"])
     ]
 )
 class Settlement(
     @Column(nullable = false)
-    val merchantId: Long,
+    val sellerId: Long,
 
     @Column(nullable = false)
     val periodStart: LocalDate,
