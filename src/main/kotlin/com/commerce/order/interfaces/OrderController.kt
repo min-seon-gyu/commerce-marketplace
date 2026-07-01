@@ -14,8 +14,6 @@ import java.math.BigDecimal
 
 data class PlaceOrderRequest(val couponId: Long? = null)
 
-data class RefundRequest(val lineIds: List<Long>)
-
 data class OrderLineResponse(
     val id: Long,
     val skuId: Long,
@@ -70,17 +68,10 @@ class OrderController(
         return ApiResponse.ok(OrderResponse.of(detail.order, detail.lines))
     }
 
+    // 취소는 발송 전(PREPARING)에만 허용된다. 배송완료 후 환불은 반품 클레임 워크플로우(운영자 승인)로만 처리한다.
     @PostMapping("/{id}/cancel")
     fun cancel(@PathVariable id: Long): ApiResponse<OrderResponse> {
         orderService.cancelOrder(SecurityUtils.currentMemberId(), id)
-        val detail = orderService.getDetail(id)
-        return ApiResponse.ok(OrderResponse.of(detail.order, detail.lines))
-    }
-
-    @PostMapping("/{id}/refund")
-    @Idempotent // 부분환불 중복 방지 — 같은 Idempotency-Key 재시도 시 원 응답 반환
-    fun refund(@PathVariable id: Long, @RequestBody request: RefundRequest): ApiResponse<OrderResponse> {
-        orderService.refundLines(SecurityUtils.currentMemberId(), id, request.lineIds)
         val detail = orderService.getDetail(id)
         return ApiResponse.ok(OrderResponse.of(detail.order, detail.lines))
     }

@@ -54,6 +54,8 @@ class SecurityConfig(
                 it.requestMatchers(HttpMethod.POST, "/api/v1/products", "/api/v1/products/*/on-sale").authenticated()
                 // 장바구니·주문: 인증 필수 — 항상 JWT 주체의 카트/주문만 조작.
                 it.requestMatchers("/api/v1/cart", "/api/v1/cart/**", "/api/v1/orders", "/api/v1/orders/**").authenticated()
+                // 배송 조회·반품 클레임: 인증 필수 + 컨트롤러에서 본인 주문/클레임만 인가.
+                it.requestMatchers("/api/v1/shipments/**", "/api/v1/return-claims/**").authenticated()
                 // 그 외(판매자 등록/조회, 회원 조회, 상품/프로모션/포인트/쿠폰)는
                 // 공개이거나 컨트롤러 레벨 SecurityUtils가 본인 자원 인가를 강제한다.
                 it.anyRequest().permitAll()
