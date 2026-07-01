@@ -3,6 +3,7 @@ package com.commerce.order.interfaces
 import com.commerce.common.api.ApiResponse
 import com.commerce.common.exception.BusinessException
 import com.commerce.common.exception.ErrorCode
+import com.commerce.common.idempotency.Idempotent
 import com.commerce.common.security.SecurityUtils
 import com.commerce.order.application.OrderService
 import com.commerce.order.domain.Order
@@ -56,6 +57,7 @@ class OrderController(
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
+    @Idempotent // 체크아웃 중복 방지 — 같은 Idempotency-Key 재시도 시 원 응답(201) 반환
     fun place(): ApiResponse<OrderResponse> {
         val order = orderService.placeOrder(SecurityUtils.currentMemberId())
         val detail = orderService.getDetail(order.id)

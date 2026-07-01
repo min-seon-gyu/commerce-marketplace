@@ -1,5 +1,6 @@
 package com.commerce.integration
 
+import com.commerce.cart.application.CartService
 import com.commerce.config.JwtTokenProvider
 import com.commerce.support.TestFixtures
 import io.kotest.matchers.shouldBe
@@ -21,8 +22,7 @@ import java.util.UUID
 
 /**
  * 멱등 재시도 시 원래 응답의 상태코드가 보존되는지 검증한다.
- * purchase는 @ResponseStatus(201 CREATED) — 캐시 status를 200으로 하드코딩하던 버그로
- * 재시도 시 200으로 회귀했었다. 이제 재시도도 201을 반환해야 한다.
+ * 주문 체크아웃(POST /orders)은 @ResponseStatus(201 CREATED) — 재시도도 201을 반환해야 한다(캐시 status 보존).
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @ActiveProfiles("test")
@@ -55,22 +55,24 @@ class IdempotencyStatusCodeTest {
 
     @Autowired lateinit var restTemplate: TestRestTemplate
     @Autowired lateinit var fixtures: TestFixtures
+    @Autowired lateinit var cartService: CartService
     @Autowired lateinit var jwtTokenProvider: JwtTokenProvider
 
     @Test
     fun `idempotent replay preserves original 201 CREATED status`() {
         val region = fixtures.createRegion(code = UUID.randomUUID().toString().take(2).uppercase())
-        val member = fixtures.createMember()
+        val seller = fixtures.createSeller(region, fixtures.createMember())
+        val buyer = fixtures.createMember()
+        val skuId = fixtures.createOnSaleSku(seller.id, BigDecimal("50000"), 5)
+        cartService.addItem(buyer.id, skuId, 1)
 
         val headers = HttpHeaders().apply {
             contentType = MediaType.APPLICATION_JSON
             set("Idempotency-Key", UUID.randomUUID().toString())
-            set("Authorization", "Bearer ${jwtTokenProvider.generateToken(member.id, "USER")}")
+            set("Authorization", "Bearer ${jwtTokenProvider.generateToken(buyer.id, "USER")}")
         }
-        // 구매자 신원은 JWT 주체에서 도출(본문 memberId 불신).
-        val body = """{"regionId": ${region.id}, "faceValue": 50000}"""
-        val request = HttpEntity(body, headers)
-        val url = "/api/v1/vouchers/purchase"
+        val request = HttpEntity<Void>(headers)
+        val url = "/api/v1/orders"
 
         val first = restTemplate.postForEntity(url, request, String::class.java)
         val replay = restTemplate.postForEntity(url, request, String::class.java)
