@@ -24,8 +24,8 @@
 
 | 묶음 | 제목 | 중요도(항목) | 규모 | 웨이브 | 상태 |
 |------|------|-------------|------|--------|------|
-| A | 보안 접근제어 | 1·2·4 (최상) | 1~2일 | 1 | 검증완료·커밋대기 |
-| C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | 예정 |
+| A | 보안 접근제어 | 1·2·4 (최상) | 1~2일 | 1 | ✅ 완료 (PR #29) |
+| C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | 진행중 |
 | D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | 예정 |
 | F | 설정·배포 안전값 | 14 | 반나절 | 1 | 예정 |
 | B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 0 / 13 묶음 완료
+> 진행률: 1 / 13 묶음 완료 (A)
 
 ---
 
@@ -72,15 +72,15 @@
 - **완료 기준**: 비로그인으로 `/transactions/{id}`·`/members/{id}` 접근 시 401 ✅. 매트릭스 테스트 통과 ✅. 전체 스위트 그린(회귀 없음) ✅.
 - **검증(2026-07-06)**: `./gradlew test` 전체 통과(1m16s). 컴파일 exit 0.
 
-### 묶음 C — 멱등성 견고화  `상태: 예정`
+### 묶음 C — 멱등성 견고화  `상태: 진행중`
 - **목표**: 멱등키를 사용자·엔드포인트에 바인딩하고, 고아 IN_PROGRESS 행을 회수한다.
-- **대상 파일**: `common/idempotency/IdempotencyInterceptor.kt`, `IdempotencyKey.kt`, `IdempotencyStore.kt`, `IdempotencyRepository.kt` + 마이그레이션(유니크 재구성)
+- **대상 파일**: `common/idempotency/IdempotencyInterceptor.kt`, `IdempotencyStore.kt`, `IdempotencyRepository.kt`, 신규 `IdempotencyCleanupScheduler.kt`
 - **할 일**:
-  - [ ] 저장/조회 키를 `(memberId, method+URI, Idempotency-Key)` 복합으로 변경(해시 한 컬럼도 가능). Redis 키도 동일 스코프.
-  - [ ] stale `IN_PROGRESS` 행 청소 스케줄러(`createdAt` 기준, 예: 1시간 경과 삭제) 또는 409 응답에 재선점 허용 정책.
-  - [ ] 유니크 제약 마이그레이션(V22) — 단일 키 유니크 → 복합.
-- **완료 기준**: 서로 다른 회원이 동일 키 문자열을 보내도 응답이 섞이지 않음(테스트). 크래시 후 stale 키가 청소되어 재시도 가능.
-- **주의**: 이 스코프 변경은 기존 `IdempotencyConcurrencyTest`·`IdempotencyStatusCodeTest`에 영향 → 함께 수정.
+  - [x] 저장/조회 키를 `(memberId, method+URI, Idempotency-Key)` 복합으로 변경 — 인터셉터에서 SHA-256(64 hex)으로 해시해 기존 `idempotency_key varchar(64)` 컬럼에 그대로 저장(Redis 키도 동일 스코프). **마이그레이션 불필요**(단일 컬럼 유니크 유지, 저장 값만 스코프 해시로 변경).
+  - [x] stale `IN_PROGRESS` 행 청소: `IdempotencyStore.purgeStaleInProgress(ttl)` + `IdempotencyCleanupScheduler`(`@Scheduled`, 기본 TTL 60분). COMPLETED 행은 보존.
+  - [x] ~~유니크 제약 마이그레이션(V22)~~ → 불필요(위 참고).
+- **완료 기준**: 서로 다른 회원이 동일 키 문자열을 보내도 각자 주문 처리(테스트 `IdempotencyScopingTest`). 오래된 IN_PROGRESS만 청소·COMPLETED 보존(테스트 `IdempotencyCleanupTest`). 기존 `IdempotencyConcurrencyTest`·`IdempotencyStatusCodeTest` 유지(동일 사용자·URL이라 영향 없음).
+- **주의**: 청소 스케줄러도 다중 인스턴스 가드는 없으나 삭제가 멱등적이라 안전(분산 락 불필요). 나머지 스케줄러 가드는 묶음 K.
 
 ### 묶음 D — 포인트·쿠폰 정합성 즉시 수정  `상태: 예정`
 - **목표**: 설계 없이 바로 고칠 수 있는 금액/정합성 버그를 제거한다.
@@ -228,5 +228,7 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | C | 멱등성 견고화 구현·검증(진행중). 멱등키를 (memberId+method+URI+key) SHA-256 스코프로 변경(스키마 변경 없음), 고아 IN_PROGRESS 청소 스케줄러 추가. 신규 테스트 IdempotencyScopingTest·IdempotencyCleanupTest.
+- 2026-07-06 | A | 완료. PR #29 머지(merge `40350aa`).
 - 2026-07-06 | A | 보안 접근제어 구현·검증 완료(커밋 대기). SecurityConfig 기본 폐쇄 전환, transactions/members 조회 소유권 검증, AdminAuthorizationTest 매트릭스 +12건. 전체 테스트 스위트 그린. actuator는 K로 이관. 의사결정 D-1(취소 시 복원)·A-1(본인/ADMIN) 확정.
 - 2026-07-06 | — | 트래커 문서 생성. 6개 영역 리뷰 + 상위 14개 발견 코드 재검증 완료. 묶음 A~M / 웨이브 1~4 계획 수립.
