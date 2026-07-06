@@ -7,10 +7,11 @@ import org.springframework.stereotype.Component
 import java.math.BigDecimal
 
 /**
- * 프로모션 예산을 Redis 원자 카운터로 제어한다(지역 월 발행 한도 패턴 미러).
+ * 프로모션 예산을 Redis 원자 카운터로 제어한다.
  * - reserve: Lua로 INCRBY + 한도 검증을 원자 수행. 초과 시 자동 롤백 후 false.
- * - release: 보상/반환 DECRBY(다운스트림 DB 실패 시, 또는 결제 취소 시 예산 반환).
- * DB 진실원천은 CouponRedemption.discountAmount 합계 → 재동기화 잡이 Redis를 보정.
+ * - release: Lua로 DECRBY + 하한 0 클램프(보상/반환·결제 취소 시 예산 반환).
+ * DB 진실원천은 비취소 쿠폰 주문의 discount_amount 합계이며,
+ * [PromotionBudgetResyncScheduler]가 주기적으로 Redis 카운터를 그 값으로 재동기화한다(유실/드리프트 보정).
  */
 @Component
 class PromotionBudgetManager(
@@ -31,9 +32,23 @@ class PromotionBudgetManager(
         return result != -1L
     }
 
-    /** 보상/반환: 소비된 예산을 되돌린다(원자 DECRBY). */
+    /** 보상/반환: 소비된 예산을 되돌린다(원자 DECRBY + 하한 0 클램프로 음수 카운터 방지). */
     fun release(promotionId: Long, discount: BigDecimal) {
-        redissonClient.getAtomicLong(budgetKey(promotionId)).addAndGet(-discount.longValueExact())
+        redissonClient.getScript(StringCodec.INSTANCE).eval<Long>(
+            RScript.Mode.READ_WRITE,
+            BUDGET_RELEASE_SCRIPT,
+            RScript.ReturnType.INTEGER,
+            listOf(budgetKey(promotionId)),
+            discount.longValueExact().toString(),
+        )
+    }
+
+    /**
+     * DB(비취소 쿠폰 주문의 discount_amount 합)를 진실원천으로 Redis 예산 카운터를 재설정한다.
+     * Redis 유실/드리프트를 [PromotionBudgetResyncScheduler]가 주기적으로 이 메서드로 보정한다.
+     */
+    fun resync(promotionId: Long, dbConsumed: Long) {
+        redissonClient.getAtomicLong(budgetKey(promotionId)).set(dbConsumed)
     }
 
     /** 현재 소비된 예산(원). */
@@ -54,6 +69,16 @@ class PromotionBudgetManager(
                 return -1
             end
             return current
+        """
+
+        /** KEYS[1]=예산 키, ARGV[1]=반환액. DECRBY 후 음수면 0으로 클램프. 반환: 새 누적(≥0). */
+        private const val BUDGET_RELEASE_SCRIPT = """
+            local v = redis.call('DECRBY', KEYS[1], ARGV[1])
+            if v < 0 then
+                redis.call('SET', KEYS[1], 0)
+                return 0
+            end
+            return v
         """
     }
 }

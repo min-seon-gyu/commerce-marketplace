@@ -29,8 +29,8 @@
 | D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | ✅ 완료 (PR #31) |
 | F | 설정·배포 안전값 | 14 | 반나절 | 1 | ✅ 완료 (PR #32) |
 | B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
-| E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | 진행중 |
-| G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | 예정 |
+| E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | ✅ 완료 (PR #33) |
+| G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | 진행중 |
 | H | 원장 판매자 차원 + clawback ★기반 | 6·13 | 1주+ | 3 | 예정 |
 | I | 플랫폼 수수료 모델 | 19 (H 의존) | 1주 | 3 | 예정 |
 | J | 구조 리팩터링(경계·순환) | 17·18 | 1주+ | 4 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 4 / 13 묶음 완료 (A, C, D, F) — 웨이브 1 완료
+> 진행률: 5 / 13 묶음 완료 (A, C, D, F, E) — 웨이브 1 완료, 웨이브 2 진행
 
 ---
 
@@ -120,7 +120,9 @@
 - **완료 기준**: Redis 장애/역직렬화 실패 시 `get`이 null 반환(500 아님, DB 폴백). 캐시 테스트 통과. 전체 스위트 그린.
 - **참고**: "무효화를 상태변경 서비스에 공배치"는 레이어 위반(app→interface)이라 이벤트 도입이 필요 → 과설계 회피 위해 현행 컨트롤러 무효화 유지. 재고 변경 시 캐시는 TTL(≤35s)로만 stale(문서화된 의도).
 
-### 묶음 G — 프로모션 예산 신뢰성  `상태: 예정`
+### 묶음 G — 프로모션 예산 신뢰성  `상태: 진행중`
+- **구현 메모(2026-07-06)**: 진실원천은 `orders`(비취소 쿠폰 주문의 discount_amount 합) — 스키마의 `coupon_redemptions` 테이블은 엔티티/쓰기 없는 빈 레거시라 사용하지 않음(정리는 묶음 M). `CouponJpaRepository.sumConsumedBudgetByPromotion` 추가, `PromotionBudgetManager.resync`(SET) + `release` Lua 하한 0 클램프, `PromotionBudgetResyncScheduler`(@Scheduled, 기본 5분; 테스트는 resync-ms 크게 설정 후 수동 호출). 허위 주석(CouponRedemption/재동기화 잡) 정정. 테스트 `PromotionBudgetResyncTest`(클램프, DB 재동기화·취소 제외).
+
 - **대상 파일**: `promotion/infrastructure/PromotionBudgetManager.kt`, 신규 재동기화 스케줄러
 - **할 일**:
   - [ ] DB(`orders`의 couponId→promotion 조인, `discount_amount` 합) 기준으로 Redis 예산 카운터를 주기/기동 시 재구축하는 잡 구현.
@@ -231,6 +233,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | G | 프로모션 예산 신뢰성(진행중). DB(orders) 기준 Redis 예산 재동기화 스케줄러 + release Lua 하한 0 클램프, 허위 CouponRedemption 주석 정정. 테스트 PromotionBudgetResyncTest.
+- 2026-07-06 | E | 완료. PR #33 머지(merge `882568e`).
 - 2026-07-06 | E | 상품 상세 캐시 회복력(진행중). Redis 캐시-어사이드를 ProductDetailCache 컴포넌트로 분리, 조회/저장/무효화 try/catch 폴백 + TTL 25~35s 지터. 테스트 ProductDetailCacheTest. 웨이브 2 착수.
 - 2026-07-06 | F | 완료. PR #32 머지(merge `eb650d4`). 웨이브 1(A·C·D·F) 완료.
 - 2026-07-06 | F | 설정·배포 안전값 반영(진행중). HikariCP 풀 40 + 타임아웃/수명, server.shutdown graceful + lifecycle 30s, Redisson 타임아웃/재시도. 테스트 프로파일 풀 10 오버라이드.
