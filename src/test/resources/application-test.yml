@@ -20,6 +20,10 @@ settlement:
     scheduled:
       enabled: false            # 테스트에선 스케줄러 비활성(잡은 JobLauncherTestUtils로 수동 실행)
 
+promotion:
+  budget:
+    resync-ms: 3600000          # 예산 재동기화 스케줄러 사실상 비활성 → 테스트는 resyncAll()을 수동 호출
+
 order:
   kafka:
     enabled: false          # 테스트 기본: 브로커 없이 DirectOrderEventRelay 사용
