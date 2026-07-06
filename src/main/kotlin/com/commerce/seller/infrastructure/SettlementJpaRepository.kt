@@ -3,6 +3,8 @@ package com.commerce.seller.infrastructure
 import com.commerce.seller.domain.Settlement
 import com.commerce.seller.domain.SettlementStatus
 import org.springframework.data.jpa.repository.JpaRepository
+import org.springframework.data.jpa.repository.Query
+import org.springframework.data.repository.query.Param
 import java.math.BigDecimal
 import java.time.LocalDate
 
@@ -25,4 +27,11 @@ interface SettlementJpaRepository : JpaRepository<Settlement, Long> {
         periodStartUpperBound: LocalDate,
         periodEndLowerBound: LocalDate,
     ): Boolean
+
+    /** 판매자에게 이미 확정/지급(CONFIRMED, PAID)된 정산액 합 — 누적 정산에서 당기 순정산액 계산에 쓴다. */
+    @Query("select coalesce(sum(s.totalAmount), 0) from Settlement s where s.sellerId = :sellerId and s.status in :statuses")
+    fun sumAmountBySellerAndStatusIn(
+        @Param("sellerId") sellerId: Long,
+        @Param("statuses") statuses: Collection<SettlementStatus>,
+    ): BigDecimal
 }

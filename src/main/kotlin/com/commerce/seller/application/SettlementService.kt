@@ -11,6 +11,7 @@ import com.commerce.seller.infrastructure.SellerJpaRepository
 import com.commerce.seller.infrastructure.SettlementJpaRepository
 import com.commerce.order.infrastructure.OrderLineJpaRepository
 import com.commerce.seller.domain.SettlementPeriod
+import com.commerce.seller.domain.SettlementStatus
 import com.commerce.transaction.application.TransactionService
 import com.commerce.transaction.domain.TransactionType
 import org.springframework.context.ApplicationEventPublisher
@@ -19,7 +20,6 @@ import org.springframework.transaction.annotation.Transactional
 import java.math.BigDecimal
 import java.time.DayOfWeek
 import java.time.LocalDate
-import java.time.LocalTime
 import java.time.ZoneId
 
 @Service
@@ -52,7 +52,7 @@ class SettlementService(
     }
 
     /**
-     * 결산 배치용: 기준일이 속한 정산 구간의 **미저장** Settlement를 만든다(중복 또는 0원이면 null=스킵).
+     * 결산 배치용: 기준일이 속한 정산 구간의 **미저장** Settlement를 만든다(중복 또는 순정산액 0 이하면 null=스킵).
      * calculate()와 달리 예외를 던지지 않아 청크 처리에서 head-of-line 없이 다음 판매자으로 진행한다.
      * 자체 read-only tx 안에서 판매자를 로드해 정산주기를 읽는다.
      */
@@ -64,18 +64,32 @@ class SettlementService(
         // 재실행 안전: 같은 구간 정산이 이미 있으면 스킵(unique 제약과 이중 방어).
         if (settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, start, end) != null) return null
 
-        val totalAmount = orderLineRepository.sumSellerSalesInPeriod(
-            sellerId, start.atStartOfDay(), end.atTime(LocalTime.MAX),
-        )
-        // 0원 정산은 만들지 않는다(노이즈 방지 + confirm 단계의 0원 고착 문제와 일관).
-        if (totalAmount.compareTo(BigDecimal.ZERO) <= 0) return null
+        // 누적 순정산액(총 미환불 매출 − 확정정산 합). 0 이하면 만들지 않는다 — 당기 순정산 없음이거나
+        // 확정 후 환불로 이월(carry)된 상태이며, 다음 기수에 매출이 이를 상쇄하면 양수로 잡힌다.
+        val net = cumulativeNet(sellerId)
+        if (net.compareTo(BigDecimal.ZERO) <= 0) return null
 
         return Settlement(
             sellerId = sellerId,
             periodStart = start,
             periodEnd = end,
-            totalAmount = totalAmount,
+            totalAmount = net,
         )
+    }
+
+    /**
+     * 누적 정산액 = 판매자의 총 미환불 매출 − 이미 확정/지급(CONFIRMED,PAID)된 정산액 합.
+     *
+     * 정산 확정/지급 **이후** 발생한 환불도 총 미환불 매출이 줄어 다음 정산에서 자연히 차감된다(clawback) —
+     * 판매자 과지급을 막는다. 순정산액이 음수면(환불 > 신규 매출) 정산을 만들지 않고 다음 기수로 이월되며,
+     * 이후 매출이 이를 상쇄하면 그만큼만 지급된다. (기간 키/unique는 그대로 유지 — 멱등·중복 방지.)
+     */
+    private fun cumulativeNet(sellerId: Long): BigDecimal {
+        val owed = orderLineRepository.sumSellerNonRefundedSalesAllTime(sellerId)
+        val settled = settlementRepository.sumAmountBySellerAndStatusIn(
+            sellerId, listOf(SettlementStatus.CONFIRMED, SettlementStatus.PAID),
+        )
+        return owed - settled
     }
 
     private fun resolvePeriod(period: SettlementPeriod, ref: LocalDate): Pair<LocalDate, LocalDate> = when (period) {
@@ -90,18 +104,13 @@ class SettlementService(
         settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, periodStart, periodEnd)
             ?.let { throw BusinessException(ErrorCode.INVALID_INPUT, "이미 해당 기간 정산이 존재합니다") }
 
-        val start = periodStart.atStartOfDay()
-        val end = periodEnd.atTime(LocalTime.MAX)
-
-        // PAID 주문의 라인 금액만 합산 (취소 주문은 CANCELLED 상태이므로 자동 제외)
-        val totalAmount = orderLineRepository.sumSellerSalesInPeriod(sellerId, start, end)
-
+        // 누적 순정산액(총 미환불 매출 − 확정정산 합). 확정 이후 취소·환불이 자연 반영된다.
         return settlementRepository.save(
             Settlement(
                 sellerId = sellerId,
                 periodStart = periodStart,
                 periodEnd = periodEnd,
-                totalAmount = totalAmount,
+                totalAmount = cumulativeNet(sellerId),
             )
         )
     }
@@ -109,19 +118,14 @@ class SettlementService(
     @Transactional
     fun confirm(settlementId: Long): Settlement {
         val settlement = getById(settlementId)
+        // 확정 시점에 누적 순정산액을 재계산한다(스냅샷 신뢰 금지). 이 정산은 아직 CONFIRMED/PAID가 아니므로
+        // 확정정산 합계에서 제외되어 이중 계산되지 않는다. 확정 이후 취소·환불(clawback)이 자동 반영된다.
+        val net = cumulativeNet(settlement.sellerId)
         settlement.confirm()
+        settlement.totalAmount = net
 
-        // 확정 시점에 totalAmount를 재계산한다(스냅샷 신뢰 금지).
-        // calculate 이후·confirm 이전에 취소된 주문은 CANCELLED가 되어 합산에서 제외되므로,
-        // 취소된 주문분을 판매자에 지급(과지급)하고 SELLER_PAYABLE을 음수로 만드는 결함을 막는다.
-        settlement.totalAmount = orderLineRepository.sumSellerSalesInPeriod(
-            settlement.sellerId,
-            settlement.periodStart.atStartOfDay(),
-            settlement.periodEnd.atTime(LocalTime.MAX),
-        )
-
-        // 0원 정산(해당 기간 주문 없음/전부 취소)은 원장 분개를 만들지 않는다 — Transaction은 양수 금액만 허용하므로
-        // 0원 거래 생성은 예외가 되어 정산이 PENDING에 영구 고착된다.
+        // 0원 이하(신규 순정산 없음/이월)면 원장 분개·거래를 만들지 않는다 — Transaction은 양수 금액만 허용하므로
+        // 0원 거래 생성은 예외가 되어 정산이 PENDING에 영구 고착된다. 음수(이월)도 지급 없이 상태만 기록한다.
         if (settlement.totalAmount.compareTo(BigDecimal.ZERO) > 0) {
             // 정산 확정 시 원장 기록: 판매자 미지급금(SELLER_PAYABLE) → 정산 확정 미지급금(SETTLEMENT_PAYABLE)
             val tx = transactionService.create(
