@@ -25,14 +25,20 @@ class JwtTokenProvider(
 
     @PostConstruct
     fun validateSecret() {
-        val isProd = env.activeProfiles.contains("prod")
         val usingDevSecret = rawSecret.isNullOrBlank() || rawSecret == DEV_SECRET
-        if (isProd && usingDevSecret) {
-            throw IllegalStateException("JWT_SECRET must be set when running with the prod profile")
+        if (!usingDevSecret) return // 명시적 시크릿이 설정됨 → OK
+
+        // dev 시크릿 폴백은 local/test/dev 프로파일에서만 허용한다. 그 외(프로파일 미지정 포함)에는
+        // 기동을 실패시킨다 — 프로파일 누락 배포가 레포에 커밋된 dev 시크릿으로 조용히 기동돼
+        // 누구나 토큰(예: ADMIN)을 위조하는 것을 막는다.
+        val devProfiles = setOf("local", "test", "dev")
+        if (env.activeProfiles.none { it in devProfiles }) {
+            throw IllegalStateException(
+                "JWT secret(jwt.secret) must be set unless running with a local/test/dev profile " +
+                    "(active profiles: ${env.activeProfiles.joinToString().ifBlank { "none" }})"
+            )
         }
-        if (!isProd && usingDevSecret) {
-            log.warn("⚠️  dev-only JWT secret in use — DO NOT use in production")
-        }
+        log.warn("⚠️  dev-only JWT secret in use — DO NOT use in production")
     }
 
     fun generateToken(memberId: Long, role: String): String {

@@ -6,6 +6,7 @@ import com.commerce.config.JwtTokenProvider
 import com.commerce.member.domain.Member
 import com.commerce.member.domain.MemberRole
 import com.commerce.member.domain.event.MemberSuspendedEvent
+import com.commerce.member.domain.event.MemberUnsuspendedEvent
 import com.commerce.member.domain.event.MemberWithdrawnEvent
 import com.commerce.member.infrastructure.MemberJpaRepository
 import com.commerce.member.interfaces.dto.LoginRequest
@@ -69,6 +70,7 @@ class MemberService(
     fun unsuspend(memberId: Long): Member {
         val member = getById(memberId)
         member.unsuspend()
+        eventPublisher.publishEvent(MemberUnsuspendedEvent(member.id))
         return member
     }
 
