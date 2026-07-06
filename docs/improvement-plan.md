@@ -27,9 +27,9 @@
 | A | 보안 접근제어 | 1·2·4 (최상) | 1~2일 | 1 | ✅ 완료 (PR #29) |
 | C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | ✅ 완료 (PR #30) |
 | D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | ✅ 완료 (PR #31) |
-| F | 설정·배포 안전값 | 14 | 반나절 | 1 | 진행중 |
+| F | 설정·배포 안전값 | 14 | 반나절 | 1 | ✅ 완료 (PR #32) |
 | B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
-| E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | 예정 |
+| E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | 진행중 |
 | G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | 예정 |
 | H | 원장 판매자 차원 + clawback ★기반 | 6·13 | 1주+ | 3 | 예정 |
 | I | 플랫폼 수수료 모델 | 19 (H 의존) | 1주 | 3 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 3 / 13 묶음 완료 (A, C, D)
+> 진행률: 4 / 13 묶음 완료 (A, C, D, F) — 웨이브 1 완료
 
 ---
 
@@ -110,14 +110,15 @@
   - [ ] 정지/탈퇴 이벤트 시 Redis 블랙리스트(Redisson 재사용) 등재 → 필터에서 확인, 또는 필터에서 회원 상태 조회.
 - **완료 기준**: 프로파일 누락 배포가 dev 시크릿으로 기동되지 않음. 정지 회원의 기존 토큰이 즉시 무효.
 
-### 묶음 E — 상품 상세 캐시  `상태: 예정`
-- **대상 파일**: `product/interfaces/ProductController.kt` → 신규 `product/application/ProductQueryService.kt`, 신규 테스트
+### 묶음 E — 상품 상세 캐시  `상태: 진행중`
+- **대상 파일**: `product/interfaces/ProductController.kt`, 신규 `product/interfaces/ProductDetailCache.kt`, 신규 `test/.../ProductDetailCacheTest.kt`
 - **할 일**:
-  - [ ] 캐시 read/write/invalidate를 try/catch로 감싸 Redis 장애 시 DB 폴백 + warn(패턴: `IdempotencyStore.cacheQuietly`).
-  - [ ] 캐시 로직을 컨트롤러 → `ProductQueryService`(또는 캐시 데코레이터)로 이동, 무효화 지점을 상태 변경 서비스와 공배치.
-  - [ ] TTL 지터(예: 25~35s) 추가.
-  - [ ] `ProductDetailCacheTest` 추가(hit/miss, onSale 무효화, 역직렬화 실패 폴백).
-- **완료 기준**: Redis 다운 시 `getDetail`이 DB로 폴백(500 아님). 캐시 테스트 통과.
+  - [x] 캐시 read/write/invalidate를 try/catch로 감싸 Redis 장애·역직렬화 실패 시 DB 폴백 + warn(패턴: `IdempotencyStore.cacheQuietly`).
+  - [x] 캐시 로직을 컨트롤러 → `ProductDetailCache` 컴포넌트로 분리. 뷰 DTO(`ProductDetailResponse`) 캐싱이라 인터페이스 계층에 둠(application이 뷰 DTO에 의존하는 레이어 위반 회피). 무효화는 `onSale` 커밋 후 컨트롤러에서 호출.
+  - [x] TTL 지터(25~35s) 추가.
+  - [x] `ProductDetailCacheTest` 추가(put/get 왕복, evict, 깨진 JSON 폴백, 빈 캐시 miss).
+- **완료 기준**: Redis 장애/역직렬화 실패 시 `get`이 null 반환(500 아님, DB 폴백). 캐시 테스트 통과. 전체 스위트 그린.
+- **참고**: "무효화를 상태변경 서비스에 공배치"는 레이어 위반(app→interface)이라 이벤트 도입이 필요 → 과설계 회피 위해 현행 컨트롤러 무효화 유지. 재고 변경 시 캐시는 TTL(≤35s)로만 stale(문서화된 의도).
 
 ### 묶음 G — 프로모션 예산 신뢰성  `상태: 예정`
 - **대상 파일**: `promotion/infrastructure/PromotionBudgetManager.kt`, 신규 재동기화 스케줄러
@@ -230,6 +231,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | E | 상품 상세 캐시 회복력(진행중). Redis 캐시-어사이드를 ProductDetailCache 컴포넌트로 분리, 조회/저장/무효화 try/catch 폴백 + TTL 25~35s 지터. 테스트 ProductDetailCacheTest. 웨이브 2 착수.
+- 2026-07-06 | F | 완료. PR #32 머지(merge `eb650d4`). 웨이브 1(A·C·D·F) 완료.
 - 2026-07-06 | F | 설정·배포 안전값 반영(진행중). HikariCP 풀 40 + 타임아웃/수명, server.shutdown graceful + lifecycle 30s, Redisson 타임아웃/재시도. 테스트 프로파일 풀 10 오버라이드.
 - 2026-07-06 | D | 완료. PR #31 머지(merge `ed016db`).
 - 2026-07-06 | D | 포인트·쿠폰 정합성 구현·검증(진행중). 부분환불 역적립을 기록 EARN 기준(`originalEarned`)으로 교체, 전체취소 시 쿠폰 `restore()` + 예산 반환. 테스트 OrderPartialRefundTest·OrderCouponDiscountTest 확장.
