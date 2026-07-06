@@ -1,9 +1,11 @@
 package com.commerce.common.idempotency
 
+import com.commerce.common.security.SecurityUtils
 import com.fasterxml.jackson.databind.ObjectMapper
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.slf4j.LoggerFactory
+import java.security.MessageDigest
 import org.springframework.core.MethodParameter
 import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.http.HttpStatus
@@ -37,7 +39,10 @@ class IdempotencyInterceptor(
         if (handler !is HandlerMethod) return true
         if (!handler.hasMethodAnnotation(Idempotent::class.java)) return true
 
-        val key = request.getHeader("Idempotency-Key") ?: return true
+        val rawKey = request.getHeader("Idempotency-Key") ?: return true
+        // 멱등키를 (인증 주체, 메서드+URI)로 스코프한다 — 다른 사용자/엔드포인트가 같은 키를 보내도
+        // 서로의 응답이 섞이거나 정상 요청이 충돌로 거절되지 않는다.
+        val key = scopedKey(request, rawKey)
 
         // 1) Redis 빠른 경로 — 이미 완료된 요청이면 원본 응답 재반환
         store.findCachedResponse(key)?.let {
@@ -107,6 +112,19 @@ class IdempotencyInterceptor(
         } catch (e: Exception) {
             log.error("Idempotency completion persist failed for key {} (business already committed): {}", key, e.message)
         }
+    }
+
+    /**
+     * 멱등키를 (인증 주체, 메서드+URI, 원본 키)로 스코프한 뒤 SHA-256(64 hex)으로 축약한다.
+     * 서로 다른 사용자/엔드포인트가 같은 Idempotency-Key를 보내도 충돌하지 않아 캐시된 응답이 유출되지 않는다.
+     * (idempotency_key 컬럼이 varchar(64)이므로 해시로 고정 길이를 맞춘다.)
+     */
+    private fun scopedKey(request: HttpServletRequest, rawKey: String): String {
+        val subject = SecurityUtils.currentMemberIdOrNull()?.toString() ?: "anon"
+        val material = "$subject\n${request.method} ${request.requestURI}\n$rawKey"
+        return MessageDigest.getInstance("SHA-256")
+            .digest(material.toByteArray(Charsets.UTF_8))
+            .joinToString("") { "%02x".format(it) }
     }
 
     private fun writeResponse(response: HttpServletResponse, cached: CachedResponse) {
