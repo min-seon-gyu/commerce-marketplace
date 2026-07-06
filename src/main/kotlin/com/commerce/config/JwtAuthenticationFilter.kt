@@ -1,5 +1,6 @@
 package com.commerce.config
 
+import com.commerce.member.infrastructure.MemberTokenBlacklist
 import jakarta.servlet.FilterChain
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
@@ -18,6 +19,7 @@ import org.springframework.web.filter.OncePerRequestFilter
 @Component
 class JwtAuthenticationFilter(
     private val jwtTokenProvider: JwtTokenProvider,
+    private val tokenBlacklist: MemberTokenBlacklist,
 ) : OncePerRequestFilter() {
 
     override fun doFilterInternal(
@@ -31,14 +33,17 @@ class JwtAuthenticationFilter(
             try {
                 if (jwtTokenProvider.validateToken(token)) {
                     val memberId: Long = jwtTokenProvider.getMemberIdFromToken(token)
-                    val role: String = jwtTokenProvider.getRoleFromToken(token)
-                    val authentication = UsernamePasswordAuthenticationToken(
-                        memberId,
-                        null,
-                        listOf(SimpleGrantedAuthority("ROLE_$role")),
-                    )
-                    authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
-                    SecurityContextHolder.getContext().authentication = authentication
+                    // 정지/탈퇴로 무효화된 회원이면 인증을 주입하지 않는다(보호 엔드포인트에서 401).
+                    if (!tokenBlacklist.isBlocked(memberId)) {
+                        val role: String = jwtTokenProvider.getRoleFromToken(token)
+                        val authentication = UsernamePasswordAuthenticationToken(
+                            memberId,
+                            null,
+                            listOf(SimpleGrantedAuthority("ROLE_$role")),
+                        )
+                        authentication.details = WebAuthenticationDetailsSource().buildDetails(request)
+                        SecurityContextHolder.getContext().authentication = authentication
+                    }
                 }
             } catch (e: Exception) {
                 SecurityContextHolder.clearContext()

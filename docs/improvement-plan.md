@@ -28,9 +28,9 @@
 | C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | ✅ 완료 (PR #30) |
 | D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | ✅ 완료 (PR #31) |
 | F | 설정·배포 안전값 | 14 | 반나절 | 1 | ✅ 완료 (PR #32) |
-| B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
+| B | 인증 토큰 하드닝 (핵심만) | 5·11 | 1~2일 | 2 | 진행중 |
 | E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | ✅ 완료 (PR #33) |
-| G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | 진행중 |
+| G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | ✅ 완료 (PR #34) |
 | H | 원장 판매자 차원 + clawback ★기반 | 6·13 | 1주+ | 3 | 예정 |
 | I | 플랫폼 수수료 모델 | 19 (H 의존) | 1주 | 3 | 예정 |
 | J | 구조 리팩터링(경계·순환) | 17·18 | 1주+ | 4 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 5 / 13 묶음 완료 (A, C, D, F, E) — 웨이브 1 완료, 웨이브 2 진행
+> 진행률: 6 / 13 묶음 완료 (A, C, D, F, E, G) — 웨이브 1 완료, 웨이브 2 진행(B만 남음)
 
 ---
 
@@ -102,13 +102,15 @@
 - **완료 기준**: 앱 정상 기동 + 전체 스위트 그린(설정 유효성·회귀 없음). 실제 처리량 개선은 RESULTS.md에 기 문서화.
 - **참고**: actuator 노출 제한은 F 범위에서 제외(관리 포트 분리 = 묶음 K). 처리량 효과는 config 레벨이라 통합 테스트로 재현하지 않고 부팅+기존 부하테스트로 검증.
 
-### 묶음 B — 인증 토큰 하드닝  `상태: 예정`
-- **대상 파일**: `config/JwtTokenProvider.kt`, `JwtAuthenticationFilter.kt`, `member/application/MemberService.kt`
+### 묶음 B — 인증 토큰 하드닝 (핵심만)  `상태: 진행중`
+- **결정(2026-07-06)**: "핵심만" 범위 — dev 시크릿 가드 반전 + 정지/탈퇴 Redis 블랙리스트. 리프레시 토큰·만료 단축은 **후속(별도 묶음)**으로 남김.
+- **대상 파일**: `config/JwtTokenProvider.kt`, `JwtAuthenticationFilter.kt`, `member/application/MemberService.kt`, 신규 `member/infrastructure/MemberTokenBlacklist.kt`, 신규 `member/domain/event/MemberUnsuspendedEvent.kt`
 - **할 일**:
-  - [ ] `JwtTokenProvider.validateSecret` 가드 반전: `local/test/dev` 프로파일일 때만 `DEV_SECRET` 폴백 허용, 그 외엔 시크릿 없으면 기동 실패.
-  - [ ] 토큰 만료 단축(30분~1h) + 리프레시 토큰 도입.
-  - [ ] 정지/탈퇴 이벤트 시 Redis 블랙리스트(Redisson 재사용) 등재 → 필터에서 확인, 또는 필터에서 회원 상태 조회.
-- **완료 기준**: 프로파일 누락 배포가 dev 시크릿으로 기동되지 않음. 정지 회원의 기존 토큰이 즉시 무효.
+  - [x] `JwtTokenProvider.validateSecret` 가드 반전: `local/test/dev` 프로파일일 때만 `DEV_SECRET` 폴백 허용, 그 외(프로파일 미지정 포함)엔 시크릿 없으면 기동 실패.
+  - [x] 정지/탈퇴 회원 Redis 블랙리스트: `MemberTokenBlacklist`가 `MemberSuspended/Withdrawn/Unsuspended` 이벤트를 AFTER_COMMIT 리스닝해 등재/해제(기존 미사용 이벤트 활용). `JwtAuthenticationFilter`가 매 요청에서 확인. TTL=토큰 수명. Redis 장애 시 fail-open.
+  - [ ] ~~토큰 만료 단축 + 리프레시 토큰~~ → 후속(범위 밖).
+- **완료 기준**: 프로파일 누락+시크릿 미설정 시 기동 실패(테스트). 정지/탈퇴 회원의 기존 토큰 즉시 401, 해제 시 재유효(테스트). 전체 스위트 그린.
+- **후속(별도)**: access 토큰 만료 단축(1h) + 리프레시 토큰(/refresh, 저장·회전).
 
 ### 묶음 E — 상품 상세 캐시  `상태: 진행중`
 - **대상 파일**: `product/interfaces/ProductController.kt`, 신규 `product/interfaces/ProductDetailCache.kt`, 신규 `test/.../ProductDetailCacheTest.kt`
@@ -233,6 +235,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | B | 인증 토큰 하드닝(핵심만, 진행중). JWT dev 시크릿 가드 반전(local/test/dev만 폴백), 정지/탈퇴 회원 Redis 블랙리스트(MemberTokenBlacklist, AFTER_COMMIT 이벤트 리스닝) + 필터 확인. 리프레시 토큰은 후속. 테스트 JwtTokenProviderSecretGuardTest·SuspendedMemberAuthTest.
+- 2026-07-06 | G | 완료. PR #34 머지(merge `ddb160a`).
 - 2026-07-06 | G | 프로모션 예산 신뢰성(진행중). DB(orders) 기준 Redis 예산 재동기화 스케줄러 + release Lua 하한 0 클램프, 허위 CouponRedemption 주석 정정. 테스트 PromotionBudgetResyncTest.
 - 2026-07-06 | E | 완료. PR #33 머지(merge `882568e`).
 - 2026-07-06 | E | 상품 상세 캐시 회복력(진행중). Redis 캐시-어사이드를 ProductDetailCache 컴포넌트로 분리, 조회/저장/무효화 try/catch 폴백 + TTL 25~35s 지터. 테스트 ProductDetailCacheTest. 웨이브 2 착수.
