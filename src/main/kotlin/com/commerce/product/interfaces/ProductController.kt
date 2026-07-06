@@ -8,15 +8,12 @@ import com.commerce.product.application.SkuSpec
 import com.commerce.product.domain.Product
 import com.commerce.product.domain.ProductCategory
 import com.fasterxml.jackson.databind.ObjectMapper
-import org.redisson.api.RedissonClient
-import org.redisson.client.codec.StringCodec
 import org.springframework.data.domain.Page
 import org.springframework.data.domain.Pageable
 import org.springframework.data.web.PageableDefault
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.*
 import java.math.BigDecimal
-import java.time.Duration
 
 data class SkuRequest(
     val skuCode: String,
@@ -64,10 +61,8 @@ data class ProductDetailResponse(
 class ProductController(
     private val productService: ProductService,
     private val objectMapper: ObjectMapper,
-    private val redisson: RedissonClient,
+    private val cache: ProductDetailCache,
 ) {
-
-    private fun detailCacheKey(id: Long) = "product:detail:$id"
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -88,20 +83,20 @@ class ProductController(
     @PostMapping("/{id}/on-sale")
     fun onSale(@PathVariable id: Long): ApiResponse<ProductResponse> {
         val response = ApiResponse.ok(ProductResponse.from(productService.onSale(SecurityUtils.currentMemberId(), id)))
-        redisson.getBucket<String>(detailCacheKey(id), StringCodec.INSTANCE).delete() // 상태 변경 시 캐시 무효화
+        cache.evict(id) // 상태 변경(커밋) 후 캐시 무효화 — Redis 장애 시에도 응답에 영향 없음
         return response
     }
 
     /**
-     * 상품 상세 조회. 읽기 편중·저변경 특성이라 Redis 캐시-어사이드(TTL 30s)로 응답을 캐싱한다.
+     * 상품 상세 조회. 읽기 편중·저변경 특성이라 Redis 캐시-어사이드(TTL 25~35s 지터)로 응답을 캐싱한다.
+     * 캐시는 best-effort([ProductDetailCache]) — Redis 장애 시 DB로 폴백해 읽기 가용성을 유지한다.
      * 재고는 최대 TTL만큼 지연될 수 있으나 카탈로그 열람엔 무방하며, 정확한 재고는 체크아웃 시 락으로 강제한다.
      */
     @GetMapping("/{id}")
     fun getDetail(@PathVariable id: Long): ApiResponse<ProductDetailResponse> {
-        val bucket = redisson.getBucket<String>(detailCacheKey(id), StringCodec.INSTANCE)
-        bucket.get()?.let { return ApiResponse.ok(objectMapper.readValue(it, ProductDetailResponse::class.java)) }
+        cache.get(id)?.let { return ApiResponse.ok(it) }
         val response = toDetailResponse(productService.getDetail(id))
-        bucket.set(objectMapper.writeValueAsString(response), Duration.ofSeconds(30))
+        cache.put(id, response)
         return ApiResponse.ok(response)
     }
 
