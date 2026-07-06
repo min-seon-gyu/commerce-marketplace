@@ -172,7 +172,10 @@ class OrderService(
         if (shippingService.isShipped(orderId)) throw BusinessException(ErrorCode.ORDER_NOT_CANCELLABLE)
         val lines = orderLineRepository.findByOrderId(orderId)
 
-        return stockLockManager.withStockLocks(lines.map { it.skuId }) {
+        // 쿠폰 복원 후 커밋 뒤 반환할 예산 정보(promotionId, discount). 커밋 성공 시에만 Redis 예산을 되돌린다.
+        var budgetToRelease: Pair<Long, BigDecimal>? = null
+
+        val cancelled = stockLockManager.withStockLocks(lines.map { it.skuId }) {
             transactionTemplate.execute { _ ->
                 val o = orderRepository.findById(orderId).orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
                 if (o.status != OrderStatus.PAID) throw BusinessException(ErrorCode.ORDER_NOT_CANCELLABLE) // 재확인(동시 취소 방지)
@@ -207,11 +210,25 @@ class OrderService(
                 }
                 comp.complete()
                 o.paymentTransactionId?.let { pointEarnService.reverseEarn(requesterMemberId, it, comp.id) }
+                // 발송 전 전체취소는 사용 쿠폰을 되돌리고(REDEEMED→ISSUED) 프로모션 예산도 반환한다 —
+                // 원장 PROMOTION_FUNDING 환입과 예산 카운터를 일치시킨다. (부분환불 refundLines는 현행대로 소진 유지.)
+                o.couponId?.let { couponId ->
+                    val coupon = couponRepository.findById(couponId)
+                        .orElseThrow { BusinessException(ErrorCode.COUPON_NOT_FOUND) }
+                    coupon.restore()
+                    budgetToRelease = coupon.promotionId to o.discountAmount
+                }
                 o.cancel()
                 eventPublisher.publishEvent(OrderCancelledEvent(o.id, requesterMemberId, o.totalAmount))
                 o
             }!!
         }
+
+        // 커밋 후 프로모션 예산 반환(Redis). 트랜잭션이 롤백됐다면 여기 도달하지 않는다.
+        budgetToRelease?.let { (promotionId, discount) ->
+            if (discount > BigDecimal.ZERO) budgetManager.release(promotionId, discount)
+        }
+        return cancelled
     }
 
     /**
@@ -247,7 +264,10 @@ class OrderService(
         val lineAmounts = allLines.map { it.lineAmount }
         val discountPerLine = allocate(lineAmounts, order.discountAmount, order.totalAmount, 2)
         val netPerLine = allLines.indices.map { lineAmounts[it] - discountPerLine[it] }
-        val pointsPerLine = allocate(netPerLine, pointEarnService.calculateEarn(order.paidAmount), order.paidAmount, 0)
+        // 포인트 배분의 총량은 적립 당시 기록된 원 적립액(EARN 합)을 쓴다. 현재 earn-rate로 재계산하면
+        // 구매 이후 요율이 바뀐 경우 역적립이 원 적립과 어긋난다(전액취소 reverseEarn과 동일 소스).
+        val originalEarned = order.paymentTransactionId?.let { pointEarnService.originalEarned(it) } ?: BigDecimal.ZERO
+        val pointsPerLine = allocate(netPerLine, originalEarned, order.paidAmount, 0)
         val idxById = allLines.withIndex().associate { (i, l) -> l.id to i }
 
         val refundGross = targets.fold(BigDecimal.ZERO) { acc, l -> acc + l.lineAmount }

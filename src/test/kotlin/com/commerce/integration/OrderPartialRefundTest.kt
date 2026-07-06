@@ -11,6 +11,7 @@ import com.commerce.ledger.domain.LedgerEntrySide
 import com.commerce.order.application.OrderService
 import com.commerce.order.domain.OrderStatus
 import com.commerce.order.infrastructure.OrderLineJpaRepository
+import com.commerce.point.application.PointEarnService
 import com.commerce.point.infrastructure.PointAccountJpaRepository
 import com.commerce.promotion.domain.DiscountType
 import com.commerce.support.IntegrationTestSupport
@@ -36,6 +37,7 @@ class OrderPartialRefundTest : IntegrationTestSupport() {
     @Autowired lateinit var cartService: CartService
     @Autowired lateinit var orderLineRepository: OrderLineJpaRepository
     @Autowired lateinit var pointAccountRepository: PointAccountJpaRepository
+    @Autowired lateinit var pointEarnService: PointEarnService
     @Autowired lateinit var stockService: StockService
     @Autowired lateinit var ledgerService: LedgerService
     @Autowired lateinit var transactionRepository: TransactionJpaRepository
@@ -266,6 +268,22 @@ class OrderPartialRefundTest : IntegrationTestSupport() {
             .errorCode shouldBe ErrorCode.INVALID_REFUND_LINES
         shouldThrow<BusinessException> { orderService.refundLines(fixtures.createMember().id, order.id, listOf(lines[1].id)) }
             .errorCode shouldBe ErrorCode.ACCESS_DENIED
+    }
+
+    @Test
+    fun `partial refund reverses points based on recorded earn not current rate`() {
+        val (buyerId, _, skus) = twoLineCart(BigDecimal("30000"), BigDecimal("20000")) // T = 50,000, 무쿠폰
+        val order = orderService.placeOrder(buyerId)
+        val paymentTxId = order.paymentTransactionId!!
+
+        // 환불 역적립의 기준은 적립 당시 기록된 원 적립액(500)이어야 한다 — 현재 earn-rate 재계산이 아니라.
+        pointEarnService.originalEarned(paymentTxId).compareTo(BigDecimal("500")) shouldBe 0
+        pointBalance(buyerId).compareTo(BigDecimal("500")) shouldBe 0
+
+        // line1(30,000) 환불 → 30,000/50,000 비율로 300 역적립, 잔여 200
+        val line1 = orderLineRepository.findByOrderId(order.id).first { it.skuId == skus.first }
+        orderService.refundLines(buyerId, order.id, listOf(line1.id))
+        pointBalance(buyerId).compareTo(BigDecimal("200")) shouldBe 0
     }
 
     @Test

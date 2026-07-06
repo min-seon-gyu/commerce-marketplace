@@ -29,6 +29,17 @@ class PointEarnService(
         baseAmount.multiply(earnRate).setScale(0, RoundingMode.HALF_UP)
 
     /**
+     * 결제 거래로 **적립 당시 실제 기록된** 원 포인트 총액(EARN 합)을 반환한다.
+     * 부분환불 시 역적립 배분의 기준으로 쓴다 — 현재 earn-rate로 재계산(calculateEarn)하면
+     * 구매 이후 요율이 바뀐 경우 역적립이 원 적립과 어긋나므로, 기록값을 진실원천으로 삼는다.
+     * (전액취소 [reverseEarn]도 동일하게 EARN 기록 합을 사용한다.)
+     */
+    fun originalEarned(sourceTransactionId: Long): BigDecimal =
+        pointTransactionRepository.findBySourceTransactionId(sourceTransactionId)
+            .filter { it.type == PointTransactionType.EARN }
+            .fold(BigDecimal.ZERO) { acc, tx -> acc + tx.amount }
+
+    /**
      * 결제 트랜잭션과 **동기**로 적립을 기록한다. 반드시 활성 트랜잭션 내부에서 호출한다.
      * baseAmount = 쿠폰 할인 적용 후 실제 결제액(plain redeem에서는 결제 금액 그대로).
      * 적립액이 0이면 아무 것도 기록하지 않고 0을 반환한다.
