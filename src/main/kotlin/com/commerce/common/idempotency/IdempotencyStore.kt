@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
+import java.time.LocalDateTime
 
 data class CachedResponse(val status: Int, val body: String)
 
@@ -57,6 +58,18 @@ class IdempotencyStore(
     @Transactional
     fun release(key: String) {
         repository.deleteByIdempotencyKey(key)
+    }
+
+    /**
+     * 미완료(IN_PROGRESS)로 남은 고아 멱등키를 회수한다. 처리 중 프로세스가 죽으면 afterCompletion이
+     * 실행되지 않아 선점 행이 영구 잔류하고, 같은 키 재시도가 계속 409로 거절된다(poison key).
+     * [ttl]보다 오래된 IN_PROGRESS 행만 삭제한다 — COMPLETED 행은 멱등 보장의 원천이므로 건드리지 않는다.
+     * 반환: 삭제 건수.
+     */
+    @Transactional
+    fun purgeStaleInProgress(ttl: Duration): Int {
+        val cutoff = LocalDateTime.now().minus(ttl)
+        return repository.deleteStaleInProgress(IdempotencyStatus.IN_PROGRESS, cutoff)
     }
 
     /** Redis 미스 시 DB에서 완료된 응답 조회(+Redis 워밍, 실패해도 무시) */
