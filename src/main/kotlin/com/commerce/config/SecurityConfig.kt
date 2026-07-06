@@ -26,13 +26,18 @@ class SecurityConfig(
             .csrf { it.disable() }
             .sessionManagement { it.sessionCreationPolicy(SessionCreationPolicy.STATELESS) }
             .authorizeHttpRequests {
-                // 공개 엔드포인트
+                // ── 공개(비인증) 엔드포인트 — 명시적 화이트리스트 ─────────────────────
                 it.requestMatchers("/api/v1/members/register", "/api/v1/members/login").permitAll()
-                it.requestMatchers("/actuator/**", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                it.requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                // actuator: 헬스/지표. metrics·prometheus 외부 노출 제한(관리 포트 분리)은 별도 처리 예정(묶음 K).
+                it.requestMatchers("/actuator/**").permitAll()
+                // 공개 카탈로그 조회는 GET만 허용한다. 등록·상태변경(POST)은 아래 매처 또는 기본 폐쇄가 잡는다.
+                it.requestMatchers(HttpMethod.GET, "/api/v1/products", "/api/v1/products/*").permitAll()
+                it.requestMatchers(HttpMethod.GET, "/api/v1/promotions/*").permitAll()
+                it.requestMatchers(HttpMethod.GET, "/api/v1/sellers/*").permitAll()
 
                 // ── 관리자(ADMIN) 전용 — 특권 운영 엔드포인트 ──────────────────────────
-                // 구체 매처가 anyRequest()보다 먼저 평가된다. GET 조회는 매처에서 제외해 공개 유지.
-                it.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")               // 원장 admin
+                it.requestMatchers("/api/v1/admin/**").hasRole("ADMIN")               // 원장/재고/배송/반품/정산배치 admin
                 it.requestMatchers("/api/v1/settlements/**").hasRole("ADMIN")          // 정산 계산/확정/이의/지급
                 it.requestMatchers(
                     HttpMethod.POST,
@@ -46,19 +51,10 @@ class SecurityConfig(
                 // 프로모션 생성은 플랫폼 출연 캠페인 → ADMIN 전용(쿠폰 발급 /{id}/coupons는 회원 인증으로 별도).
                 it.requestMatchers(HttpMethod.POST, "/api/v1/promotions").hasRole("ADMIN")
 
-                // ── 인증 필요(역할 무관) ─────────────────────────────────────────────
-                it.requestMatchers("/api/v1/me").authenticated()
-                // 판매자 등록: 인증 필수 + 컨트롤러에서 ownerId를 JWT 주체로 강제(본인 판매자만).
-                it.requestMatchers(HttpMethod.POST, "/api/v1/sellers").authenticated()
-                // 상품 등록/판매개시: 인증 필수 + 서비스에서 판매자 소유주(JWT 주체) 강제. GET 조회는 공개.
-                it.requestMatchers(HttpMethod.POST, "/api/v1/products", "/api/v1/products/*/on-sale").authenticated()
-                // 장바구니·주문: 인증 필수 — 항상 JWT 주체의 카트/주문만 조작.
-                it.requestMatchers("/api/v1/cart", "/api/v1/cart/**", "/api/v1/orders", "/api/v1/orders/**").authenticated()
-                // 배송 조회·반품 클레임: 인증 필수 + 컨트롤러에서 본인 주문/클레임만 인가.
-                it.requestMatchers("/api/v1/shipments/**", "/api/v1/return-claims/**").authenticated()
-                // 그 외(판매자 등록/조회, 회원 조회, 상품/프로모션/포인트/쿠폰)는
-                // 공개이거나 컨트롤러 레벨 SecurityUtils가 본인 자원 인가를 강제한다.
-                it.anyRequest().permitAll()
+                // ── 그 외 전부 인증 필요(기본 폐쇄) ───────────────────────────────────
+                // 매처 누락이 "공개"가 아니라 "차단"으로 실패하도록 기본값을 폐쇄한다.
+                // 본인 자원(주문/거래/회원/포인트/쿠폰/배송/반품) 소유권은 각 컨트롤러가 SecurityUtils로 강제한다.
+                it.anyRequest().authenticated()
             }
             // 미인증 접근 시 403 대신 401 반환.
             .exceptionHandling { it.authenticationEntryPoint(HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)) }
