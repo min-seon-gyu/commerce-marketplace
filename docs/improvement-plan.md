@@ -26,8 +26,8 @@
 |------|------|-------------|------|--------|------|
 | A | 보안 접근제어 | 1·2·4 (최상) | 1~2일 | 1 | ✅ 완료 (PR #29) |
 | C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | ✅ 완료 (PR #30) |
-| D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | 진행중 |
-| F | 설정·배포 안전값 | 14 | 반나절 | 1 | 예정 |
+| D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | ✅ 완료 (PR #31) |
+| F | 설정·배포 안전값 | 14 | 반나절 | 1 | 진행중 |
 | B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
 | E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | 예정 |
 | G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 2 / 13 묶음 완료 (A, C)
+> 진행률: 3 / 13 묶음 완료 (A, C, D)
 
 ---
 
@@ -92,14 +92,15 @@
 - **완료 기준**: 부분환불 역적립이 기록 EARN에 비례(테스트 `OrderPartialRefundTest`). 전체취소 후 쿠폰 ISSUED·예산 0·재사용 가능(테스트 `OrderCouponDiscountTest`). 기존 원장 정합성 테스트 유지.
 - **참고**: 부분환불(refund)과 전체취소(cancel)의 쿠폰 처리 비대칭은 의도적 — 발송 전 셀프취소는 쿠폰 반환, 발송 후 반품은 소진 유지.
 
-### 묶음 F — 설정·배포 안전값  `상태: 예정`
+### 묶음 F — 설정·배포 안전값  `상태: 진행중`
 - **목표**: 검증된 튜닝과 안전한 종료를 설정에 반영(저위험 quick win).
-- **대상 파일**: `src/main/resources/application.yml`, `config/RedisConfig.kt`, `Dockerfile`(주석 정합)
+- **대상 파일**: `src/main/resources/application.yml`, `src/test/resources/application-test.yml`, `config/RedisConfig.kt`
 - **할 일**:
-  - [ ] HikariCP `maximum-pool-size`(예: `${DB_POOL_SIZE:40}`), `connection-timeout`, `max-lifetime` 명시 — `load-test/RESULTS.md`가 5배 개선으로 문서화한 값 반영.
-  - [ ] `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`.
-  - [ ] Redisson `connectTimeout`/`timeout`/`retryAttempts` 명시.
-- **완료 기준**: 기동 로그에서 풀 크기 확인. graceful shutdown 동작(수동). RESULTS.md가 설정 파일을 링크.
+  - [x] HikariCP `maximum-pool-size: ${DB_POOL_SIZE:40}` + `connection-timeout: 10000` + `max-lifetime: 1800000` 명시(RESULTS.md 검증값). 테스트 프로파일은 풀 10으로 오버라이드(컨테이너 커넥션 압박 회피).
+  - [x] `server.shutdown: graceful` + `spring.lifecycle.timeout-per-shutdown-phase: 30s`(Dockerfile exec form 주석과 실제 동작 일치).
+  - [x] Redisson `connectTimeout`/`timeout`/`retryAttempts`/`retryInterval` 명시(장애 시 예측 가능한 실패).
+- **완료 기준**: 앱 정상 기동 + 전체 스위트 그린(설정 유효성·회귀 없음). 실제 처리량 개선은 RESULTS.md에 기 문서화.
+- **참고**: actuator 노출 제한은 F 범위에서 제외(관리 포트 분리 = 묶음 K). 처리량 효과는 config 레벨이라 통합 테스트로 재현하지 않고 부팅+기존 부하테스트로 검증.
 
 ### 묶음 B — 인증 토큰 하드닝  `상태: 예정`
 - **대상 파일**: `config/JwtTokenProvider.kt`, `JwtAuthenticationFilter.kt`, `member/application/MemberService.kt`
@@ -229,6 +230,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | F | 설정·배포 안전값 반영(진행중). HikariCP 풀 40 + 타임아웃/수명, server.shutdown graceful + lifecycle 30s, Redisson 타임아웃/재시도. 테스트 프로파일 풀 10 오버라이드.
+- 2026-07-06 | D | 완료. PR #31 머지(merge `ed016db`).
 - 2026-07-06 | D | 포인트·쿠폰 정합성 구현·검증(진행중). 부분환불 역적립을 기록 EARN 기준(`originalEarned`)으로 교체, 전체취소 시 쿠폰 `restore()` + 예산 반환. 테스트 OrderPartialRefundTest·OrderCouponDiscountTest 확장.
 - 2026-07-06 | C | 완료. PR #30 머지(merge `0be4a66`).
 - 2026-07-06 | C | 멱등성 견고화 구현·검증(진행중). 멱등키를 (memberId+method+URI+key) SHA-256 스코프로 변경(스키마 변경 없음), 고아 IN_PROGRESS 청소 스케줄러 추가. 신규 테스트 IdempotencyScopingTest·IdempotencyCleanupTest.
