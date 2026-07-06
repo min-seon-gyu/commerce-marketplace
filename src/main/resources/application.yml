@@ -4,6 +4,11 @@ spring:
     username: ${DB_USERNAME:root}
     password: ${DB_PASSWORD:root}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 부하테스트(load-test/RESULTS.md)에서 풀 10→40 튜닝이 성공 처리량을 약 5배로 끌어올린 검증값.
+      maximum-pool-size: ${DB_POOL_SIZE:40}
+      connection-timeout: 10000   # 풀 고갈 시 기본 30초 대기 대신 10초에 실패 → 스레드 장기 점유 방지
+      max-lifetime: 1800000       # 30분 — MySQL wait_timeout보다 짧게 유지해 끊긴 커넥션 재사용 회피
   jpa:
     hibernate:
       ddl-auto: validate
@@ -42,6 +47,8 @@ spring:
       # outbox relay의 블로킹 send가 다른 @Scheduled(만료 배치·원장 정합성 검증 등)를 기아시키지 않도록 풀 확대.
       pool:
         size: 5
+  lifecycle:
+    timeout-per-shutdown-phase: 30s   # graceful shutdown 드레인 최대 대기(초과 시 강제 종료)
 
 point:
   earn-rate: "0.01"
@@ -54,6 +61,7 @@ settlement:
 
 server:
   port: 8080
+  shutdown: graceful   # SIGTERM 시 진행 중 요청을 드레인 후 종료(Dockerfile exec form과 함께 무중단 재배포)
 
 logging:
   pattern:

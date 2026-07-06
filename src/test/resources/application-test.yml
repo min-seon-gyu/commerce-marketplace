@@ -1,4 +1,7 @@
 spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 10   # 테스트는 컨테이너별 MySQL max_connections 압박을 피해 작은 풀 사용(운영 기본 40 오버라이드)
   jpa:
     hibernate:
       ddl-auto: validate
