@@ -28,17 +28,17 @@
 | C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | ✅ 완료 (PR #30) |
 | D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | ✅ 완료 (PR #31) |
 | F | 설정·배포 안전값 | 14 | 반나절 | 1 | ✅ 완료 (PR #32) |
-| B | 인증 토큰 하드닝 (핵심만) | 5·11 | 1~2일 | 2 | 진행중 |
+| B | 인증 토큰 하드닝 (핵심만) | 5·11 | 1~2일 | 2 | ✅ 완료 (PR #35) |
 | E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | ✅ 완료 (PR #33) |
 | G | 프로모션 예산 신뢰성 | 8 | 3일~1주 | 2 | ✅ 완료 (PR #34) |
-| H | 원장 판매자 차원 + clawback ★기반 | 6·13 | 1주+ | 3 | 예정 |
+| H | 정산 clawback (누적 모델) ★재무 | 6 | 1주+ | 3 | 진행중 |
 | I | 플랫폼 수수료 모델 | 19 (H 의존) | 1주 | 3 | 예정 |
 | J | 구조 리팩터링(경계·순환) | 17·18 | 1주+ | 4 | 예정 |
 | K | 운영 확장성(스케줄러·페이지네이션) | 15·18 일부 | 3일~1주 | 4 | 예정 |
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 6 / 13 묶음 완료 (A, C, D, F, E, G) — 웨이브 1 완료, 웨이브 2 진행(B만 남음)
+> 진행률: 7 / 13 묶음 완료 (A, C, D, F, E, G, B) — 웨이브 1·2 완료, 웨이브 3 진행
 
 ---
 
@@ -132,15 +132,16 @@
   - [ ] `PromotionBudgetManager.kt:13`의 허위 주석(`CouponRedemption`, 재동기화 잡) 제거 또는 실제 구현으로 대체.
 - **완료 기준**: Redis 키 유실 후 재동기화 잡이 DB 기준으로 카운터 복원(테스트).
 
-### 묶음 H — 원장 판매자 차원 + clawback  `상태: 예정`  ★재무 기반작업
-- **대상 파일**: `ledger/domain/LedgerEntry.kt`, `ledger/application/LedgerVerificationService.kt`, `seller/application/SettlementService.kt`, `order/domain/OrderLine.kt`, 마이그레이션
+### 묶음 H — 정산 clawback (누적 모델)  `상태: 진행중`  ★재무 기반작업
+- **결정(2026-07-06)**: H-1 = 차기 정산 음수 조정(이월). 구현은 **누적 정산 모델**로 함 — 기간별 매출 대신 `총 미환불 매출 − 확정정산 합`을 정산액으로 계산. 확정 후 환불이 총 미환불 매출을 줄여 자동 clawback되고, 음수면 정산을 만들지 않고 자연 이월된다(원장 SELLER_PAYABLE도 0으로 수렴). 이 방식은 이월을 별도 상태 없이 처리하고 `refundedAt`·per-line 추적이 불필요.
+- **대상 파일**: `seller/application/SettlementService.kt`(calculate/confirm/buildForBatch 누적화 + `cumulativeNet`), `order/infrastructure/OrderLineJpaRepository.kt`(`sumSellerNonRefundedSalesAllTime`), `seller/infrastructure/SettlementJpaRepository.kt`(`sumAmountBySellerAndStatusIn`), 신규 `test/.../SettlementClawbackTest.kt`
 - **할 일**:
-  - [ ] `LedgerEntry`에 `subjectId`(sellerId/memberId) 컬럼 추가 → 판매자별 원장 대사 가능.
-  - [ ] `OrderLine.refunded`(boolean) → `refundedAt`(timestamp)로 변경 → "정산 후 환불" 식별 가능.
-  - [ ] 정산 확정/지급 **이후** 승인된 환불을 차기 정산에서 차감하는 조정(음수 carry) 라인 도입.
-  - [ ] `LedgerVerificationService`를 실질 검증으로 강화: transactionId별 차대변 균형, `SELLER_PAYABLE` net ≥ 0, `SETTLEMENT_PAYABLE` net vs 확정 정산 합 대조.
-- **완료 기준**: 확정 후 환불 → 다음 정산에서 차감됨(테스트). 검증 배치가 SELLER_PAYABLE 음수를 탐지.
-- **선행/후행**: `I`가 이 위에 얹힘. `D`의 임시 완화책(markPaid 재검증)은 이 묶음 완료 시 제거 가능.
+  - [x] 정산액 = 누적 순정산(총 미환불 매출 − 확정/지급 정산 합). calculate/confirm/buildSettlementForBatch 일관 적용. 기간 키/unique/멱등은 유지.
+  - [x] 확정 후 환불이 차기 정산에서 차감(clawback)되고, 환불 > 신규매출이면 정산 미생성(이월). 테스트로 검증.
+  - [ ] ~~마이그레이션(refundedAt/subjectId)~~ → 누적 모델은 스키마 변경 불필요.
+- **완료 기준**: 정산 확정 후 환불 → 차기 정산에서 차감(테스트 `SettlementClawbackTest`). 이월 시 정산 미생성. 기존 정산 테스트 유지(모두 판매자당 1건이라 `owed−0=기간매출`로 무영향). 전체 스위트 그린.
+- **후속(H-2, 별도)**: `LedgerEntry.subjectId`(판매자별 원장 대사) + `LedgerVerificationService` 강화(transactionId별 균형, 판매자별 SELLER_PAYABLE net≥0, SETTLEMENT_PAYABLE vs 확정 정산 합). `D`의 markPaid 재검증 완화책은 이 clawback으로 불필요.
+- **후행**: `I`(수수료)가 이 위에 얹힘.
 
 ### 묶음 I — 플랫폼 수수료 모델  `상태: 예정`  (H 의존)
 - **대상 파일**: `seller/domain/Seller.kt`, `ledger/domain/AccountCode.kt`, `seller/application/SettlementService.kt`, 마이그레이션
@@ -235,6 +236,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | H | 정산 clawback 누적 모델(진행중). 정산액을 기간매출 → (총 미환불 매출 − 확정정산 합)으로 전환, 확정 후 환불 자동 clawback + 음수 이월. 스키마 변경 없음. subjectId·검증 강화는 H-2 후속. 테스트 SettlementClawbackTest.
+- 2026-07-06 | B | 완료. PR #35 머지(merge `d5fab88`). 웨이브 2(E·G·B) 완료.
 - 2026-07-06 | B | 인증 토큰 하드닝(핵심만, 진행중). JWT dev 시크릿 가드 반전(local/test/dev만 폴백), 정지/탈퇴 회원 Redis 블랙리스트(MemberTokenBlacklist, AFTER_COMMIT 이벤트 리스닝) + 필터 확인. 리프레시 토큰은 후속. 테스트 JwtTokenProviderSecretGuardTest·SuspendedMemberAuthTest.
 - 2026-07-06 | G | 완료. PR #34 머지(merge `ddb160a`).
 - 2026-07-06 | G | 프로모션 예산 신뢰성(진행중). DB(orders) 기준 Redis 예산 재동기화 스케줄러 + release Lua 하한 0 클램프, 허위 CouponRedemption 주석 정정. 테스트 PromotionBudgetResyncTest.
