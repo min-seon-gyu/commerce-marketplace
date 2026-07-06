@@ -25,8 +25,8 @@
 | 묶음 | 제목 | 중요도(항목) | 규모 | 웨이브 | 상태 |
 |------|------|-------------|------|--------|------|
 | A | 보안 접근제어 | 1·2·4 (최상) | 1~2일 | 1 | ✅ 완료 (PR #29) |
-| C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | 진행중 |
-| D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | 예정 |
+| C | 멱등성 견고화 | 3·12 | 1~2일 | 1 | ✅ 완료 (PR #30) |
+| D | 포인트·쿠폰 정합성 즉시 수정 | 7·9 | 1~2일 | 1 | 진행중 |
 | F | 설정·배포 안전값 | 14 | 반나절 | 1 | 예정 |
 | B | 인증 토큰 하드닝 | 5·11 | 1주 이내 | 2 | 예정 |
 | E | 상품 상세 캐시 | 10 (+16 일부) | 1~2일 | 2 | 예정 |
@@ -38,7 +38,7 @@
 | L | 테스트 인프라(커버리지·JaCoCo) | 16 | 3일~1주 | 4 | 예정 |
 | M | 드리프트 정리(voucher·죽은코드) | 20 | 3일~1주 | 4 | 예정 |
 
-> 진행률: 1 / 13 묶음 완료 (A)
+> 진행률: 2 / 13 묶음 완료 (A, C)
 
 ---
 
@@ -82,14 +82,15 @@
 - **완료 기준**: 서로 다른 회원이 동일 키 문자열을 보내도 각자 주문 처리(테스트 `IdempotencyScopingTest`). 오래된 IN_PROGRESS만 청소·COMPLETED 보존(테스트 `IdempotencyCleanupTest`). 기존 `IdempotencyConcurrencyTest`·`IdempotencyStatusCodeTest` 유지(동일 사용자·URL이라 영향 없음).
 - **주의**: 청소 스케줄러도 다중 인스턴스 가드는 없으나 삭제가 멱등적이라 안전(분산 락 불필요). 나머지 스케줄러 가드는 묶음 K.
 
-### 묶음 D — 포인트·쿠폰 정합성 즉시 수정  `상태: 예정`
-- **목표**: 설계 없이 바로 고칠 수 있는 금액/정합성 버그를 제거한다.
-- **대상 파일**: `order/application/OrderService.kt`, `promotion/infrastructure/PromotionBudgetManager.kt`(주석)
+### 묶음 D — 포인트·쿠폰 정합성 즉시 수정  `상태: 진행중`
+- **목표**: 설계 없이 바로 고칠 수 있는 금액/정합성 버그를 제거한다. (D-1 결정: 취소 시 쿠폰·예산 복원.)
+- **대상 파일**: `order/application/OrderService.kt`, `point/application/PointEarnService.kt`, `promotion/domain/Coupon.kt`
 - **할 일**:
-  - [ ] `OrderService.kt:250` 포인트 배분 총량을 `calculateEarn(order.paidAmount)`(현재 rate) → **적립 당시 `PointTransaction` EARN 합계**로 교체.
-  - [ ] `cancelOrder`(`OrderService.kt:166-215`) 커밋 후 `budgetManager.release` 호출 + 쿠폰 ISSUED 복원(만료 재검사). **또는** 의도적 미복원이면 주석/문서를 정정하고 `PromotionBudgetManager.kt:12`의 "결제 취소 시 예산 반환" 문구 제거 → §6 결정 필요.
-  - [ ] (선택·임시) `H` 착수 전 완화책으로 `SettlementService.markPaid` 직전 환불 재검증 추가 검토.
-- **완료 기준**: earn-rate 변경 시나리오 테스트에서 환불 포인트가 원 적립에 비례. 전체취소 후 예산 카운터/쿠폰 상태가 결정된 정책과 일치.
+  - [x] 포인트 배분 총량을 `calculateEarn(order.paidAmount)`(현재 rate) → **적립 당시 기록된 EARN 합계**(`PointEarnService.originalEarned`)로 교체. 전액취소 `reverseEarn`과 동일 소스로 일치.
+  - [x] `cancelOrder` 커밋 후 `budgetManager.release` 호출 + 쿠폰 `restore()`(REDEEMED→ISSUED). 부분환불 `refundLines`는 현행대로 소진 유지(발송 후 반품 흐름).
+  - [ ] ~~markPaid 직전 재검증 완화책~~ → 묶음 H(clawback)에서 본 설계로 처리.
+- **완료 기준**: 부분환불 역적립이 기록 EARN에 비례(테스트 `OrderPartialRefundTest`). 전체취소 후 쿠폰 ISSUED·예산 0·재사용 가능(테스트 `OrderCouponDiscountTest`). 기존 원장 정합성 테스트 유지.
+- **참고**: 부분환불(refund)과 전체취소(cancel)의 쿠폰 처리 비대칭은 의도적 — 발송 전 셀프취소는 쿠폰 반환, 발송 후 반품은 소진 유지.
 
 ### 묶음 F — 설정·배포 안전값  `상태: 예정`
 - **목표**: 검증된 튜닝과 안전한 종료를 설정에 반영(저위험 quick win).
@@ -228,6 +229,8 @@
 
 > 형식: `YYYY-MM-DD | 묶음 | 내용` (최신이 위)
 
+- 2026-07-06 | D | 포인트·쿠폰 정합성 구현·검증(진행중). 부분환불 역적립을 기록 EARN 기준(`originalEarned`)으로 교체, 전체취소 시 쿠폰 `restore()` + 예산 반환. 테스트 OrderPartialRefundTest·OrderCouponDiscountTest 확장.
+- 2026-07-06 | C | 완료. PR #30 머지(merge `0be4a66`).
 - 2026-07-06 | C | 멱등성 견고화 구현·검증(진행중). 멱등키를 (memberId+method+URI+key) SHA-256 스코프로 변경(스키마 변경 없음), 고아 IN_PROGRESS 청소 스케줄러 추가. 신규 테스트 IdempotencyScopingTest·IdempotencyCleanupTest.
 - 2026-07-06 | A | 완료. PR #29 머지(merge `40350aa`).
 - 2026-07-06 | A | 보안 접근제어 구현·검증 완료(커밋 대기). SecurityConfig 기본 폐쇄 전환, transactions/members 조회 소유권 검증, AdminAuthorizationTest 매트릭스 +12건. 전체 테스트 스위트 그린. actuator는 K로 이관. 의사결정 D-1(취소 시 복원)·A-1(본인/ADMIN) 확정.

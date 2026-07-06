@@ -131,4 +131,51 @@ class OrderCouponDiscountTest : IntegrationTestSupport() {
         }
         ex.errorCode shouldBe ErrorCode.MIN_SPEND_NOT_MET
     }
+
+    @Test
+    fun `full cancel restores coupon to ISSUED and releases promotion budget`() {
+        val (buyerId, _) = buyerWithCart(BigDecimal("20000")) // T = 20,000
+        val promo = fixtures.createPromotion(
+            discountType = DiscountType.FIXED, discountValue = BigDecimal("3000"),
+            minSpend = BigDecimal.ZERO, perMemberLimit = 1, budgetLimit = BigDecimal("1000000"),
+        )
+        val coupon = fixtures.issueCoupon(promo.id, buyerId)
+
+        val order = orderService.placeOrder(buyerId, coupon.id)
+        couponRepository.findById(coupon.id).get().status shouldBe CouponStatus.REDEEMED
+        budgetManager.consumed(promo.id) shouldBe 3000L
+
+        orderService.cancelOrder(buyerId, order.id)
+
+        // 발송 전 전체취소 → 쿠폰은 재사용 가능하도록 ISSUED로 복원, 예산도 반환(원장 PROMOTION_FUNDING 환입과 일치).
+        couponRepository.findById(coupon.id).get().status shouldBe CouponStatus.ISSUED
+        budgetManager.consumed(promo.id) shouldBe 0L
+        verificationService.verify().isBalanced.shouldBeTrue()
+    }
+
+    @Test
+    fun `restored coupon can be reused on a new order after cancel`() {
+        val owner = fixtures.createMember()
+        val seller = fixtures.createSeller(owner)
+        val buyer = fixtures.createMember()
+        val sku1 = fixtures.createOnSaleSku(seller.id, BigDecimal("20000"), 100)
+        cartService.addItem(buyer.id, sku1, 1)
+        val promo = fixtures.createPromotion(
+            discountType = DiscountType.FIXED, discountValue = BigDecimal("3000"),
+            minSpend = BigDecimal.ZERO, perMemberLimit = 1, budgetLimit = BigDecimal("1000000"),
+        )
+        val coupon = fixtures.issueCoupon(promo.id, buyer.id)
+
+        val first = orderService.placeOrder(buyer.id, coupon.id)
+        orderService.cancelOrder(buyer.id, first.id)
+
+        // 이전 사용이 취소되어 REDEEMED 카운트가 0이므로 perMemberLimit=1이어도 재사용 가능해야 한다.
+        val sku2 = fixtures.createOnSaleSku(seller.id, BigDecimal("20000"), 100)
+        cartService.addItem(buyer.id, sku2, 1)
+        val second = orderService.placeOrder(buyer.id, coupon.id)
+
+        second.discountAmount.compareTo(BigDecimal("3000")) shouldBe 0
+        couponRepository.findById(coupon.id).get().status shouldBe CouponStatus.REDEEMED
+        verificationService.verify().isBalanced.shouldBeTrue()
+    }
 }

@@ -46,6 +46,15 @@ class Coupon(
         status = CouponStatus.CANCELLED
     }
 
+    /**
+     * 사용 쿠폰을 되돌린다(REDEEMED→ISSUED). 주문 전체취소 시 단일 사용 쿠폰을 고객에게 반환하기 위한 것.
+     * 만료 여부는 되돌린 뒤 재사용 시점에 [redeem]이 검사하므로 여기서는 상태만 복원한다.
+     */
+    fun restore() {
+        if (status != CouponStatus.REDEEMED) throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
+        status = CouponStatus.ISSUED
+    }
+
     fun expire() {
         if (status != CouponStatus.ISSUED) throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
         status = CouponStatus.EXPIRED
