@@ -178,7 +178,7 @@
   - [ ] 동시성 테스트 예외 삼킴 → `runConcurrently(n){}` 헬퍼로 이관.
 - **완료 기준**: JaCoCo 리포트 생성. cart/transaction/member 계층 테스트 존재.
 
-### 묶음 M — 드리프트 정리  `상태: 예정`
+### 묶음 M — 드리프트 정리  `상태: 예정 (죽은 enum/상태 2건 선행 완료)`
 - **대상 파일**: `load-test/k6/*`, `monitoring/**`, `application.yml`(voucher 태그), `Dockerfile`, 죽은 이벤트/QueryDSL, `ci.yml`
 - **할 일**:
   - [ ] voucher 잔재 일괄 정리: k6 시나리오 4종(제거된 `/api/v1/vouchers/*` 호출 → 404), Grafana 대시보드(존재하지 않는 메트릭), DB명·컨테이너·jar·메트릭 태그.
@@ -186,6 +186,9 @@
   - [ ] 미사용 QueryDSL 의존/설정 제거(kapt 빌드 비용).
   - [ ] 정산 기간 경계 `BETWEEN … LocalTime.MAX` → 반개구간(`>= start AND < endExclusive`)으로 교체.
   - [ ] CI 복붙 주석 정리, 모니터링 스택 2벌 통합.
+  - [x] 죽은 enum/상태 선행 정리(대화발 단발 chore, 정식 M 실행과 별개로 처리):
+    - `ProductStatus.SOLD_OUT` 제거 — 품절은 SKU/재고(stocks) 레벨 관리, 상품 단위 상태 불필요 (PR #37, `Product.kt`·`V22`).
+    - `TransactionStatus` `FAILED`·`CANCEL_REQUESTED`·`CANCELLED` + `fail()`/`requestCancel()`/`cancel()` + `TRANSACTION_NOT_CANCELLABLE` 제거 — 실패=단일 tx 롤백, 취소=원거래 가리키는 별도 역거래(ORDER_CANCEL)로 처리하므로 불필요(불변·감사추적 원칙과 모순) (PR #38, `Transaction.kt`·`TransactionStatus.kt`·`ErrorCode.kt`·`V23`).
 - **완료 기준**: k6 시나리오가 현 API로 실행 가능. Grafana 패널이 실제 메트릭 표시.
 
 ---
