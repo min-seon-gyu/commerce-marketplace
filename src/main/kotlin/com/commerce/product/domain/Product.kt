@@ -7,7 +7,7 @@ import jakarta.persistence.*
 
 enum class ProductCategory { FURNITURE, LIGHTING, KITCHEN, FABRIC, DECO, APPLIANCE, OTHER }
 
-enum class ProductStatus { DRAFT, ON_SALE, SUSPENDED, SOLD_OUT }
+enum class ProductStatus { DRAFT, ON_SALE, SUSPENDED }
 
 /**
  * 상품(카탈로그 단위). 판매 옵션 조합은 하위 [Sku]로 표현하며, 가격·재고는 SKU 단위로 관리된다.
