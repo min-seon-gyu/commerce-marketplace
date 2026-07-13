@@ -1,7 +1,7 @@
 package com.commerce.transaction.domain
 
 enum class TransactionStatus {
-    PENDING, COMPLETED, FAILED, CANCEL_REQUESTED, CANCELLED
+    PENDING, COMPLETED
 }
 
 enum class TransactionType {

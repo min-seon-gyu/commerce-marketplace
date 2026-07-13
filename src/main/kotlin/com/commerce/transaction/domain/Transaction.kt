@@ -39,22 +39,4 @@ class Transaction(
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
         status = TransactionStatus.COMPLETED
     }
-
-    fun fail() {
-        if (status != TransactionStatus.PENDING)
-            throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
-        status = TransactionStatus.FAILED
-    }
-
-    fun requestCancel() {
-        if (status != TransactionStatus.COMPLETED)
-            throw BusinessException(ErrorCode.TRANSACTION_NOT_CANCELLABLE)
-        status = TransactionStatus.CANCEL_REQUESTED
-    }
-
-    fun cancel() {
-        if (status != TransactionStatus.CANCEL_REQUESTED)
-            throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
-        status = TransactionStatus.CANCELLED
-    }
 }
