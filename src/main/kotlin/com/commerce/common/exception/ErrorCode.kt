@@ -24,10 +24,6 @@ enum class ErrorCode(
     SELLER_NOT_APPROVED(HttpStatus.BAD_REQUEST, "승인된 판매자이 아닙니다"),
     INVALID_STATE_TRANSITION(HttpStatus.BAD_REQUEST, "허용되지 않은 상태 전이입니다"),
 
-
-    // Transaction
-    TRANSACTION_NOT_CANCELLABLE(HttpStatus.BAD_REQUEST, "취소할 수 없는 거래입니다"),
-
     // Product / Inventory
     DUPLICATE_SKU_CODE(HttpStatus.CONFLICT, "이미 존재하는 SKU 코드입니다"),
     OUT_OF_STOCK(HttpStatus.BAD_REQUEST, "재고가 부족합니다"),
