@@ -33,7 +33,7 @@ fun record(debitAccount, creditAccount, amount, transactionId, entryType): List<
 | `SETTLEMENT_PAYABLE` | 대변 | 정산 확정으로 지급이 확정된 금액 |
 | `POINT_BALANCE` | 차변 | 적립 포인트 잔액 |
 | `POINT_FUNDING` | 대변 | 플랫폼 포인트 적립 출연 |
-| `PROMOTION_FUNDING` | 대변 | 플랫폼 쿠폰/프로모션 출연 |
+| `PROMOTION_FUNDING` | 차변 | 플랫폼 쿠폰/프로모션 출연(결제 시 DEBIT, 판매자 gross 보전) |
 
 ---
 
