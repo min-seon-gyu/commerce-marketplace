@@ -97,6 +97,7 @@ CREDIT POINT_BALANCE   P      → PointAccount.balance 차감, net 0 복귀
 - 두 쌍의 `SELLER_PAYABLE` 차변 합 = `paid + D = T`(gross) → 결제 시 쌓인 `SELLER_PAYABLE`이 정확히 해소된다. 취소 후 **모든 계정 net 0** 복귀.
 - 원 결제·EARN 행은 보존하고 취소 행을 추가한다(감사 추적성). 보상 거래는 `originalTransactionId`로 원 결제 거래에 연결된다.
 - **경계**: `paid=0`(100% 할인)이면 현금 환급 leg를, `D=0`(무쿠폰)이면 출연 환입 leg를 생략한다(0원 leg 미기록).
+- **쿠폰·예산 복원**: 취소는 주문 미이행이므로 사용 쿠폰을 `REDEEMED → ISSUED`로 되살리고, 커밋 후 예약 예산을 `release`한다(발송 후 반품 환불(3절)과 달리 되돌린다).
 - 발송/배송 후에는 셀프 취소가 막히며(배송 게이트), 환불은 반품 클레임 승인(3절)으로만 이뤄진다.
 
 ### 3) 부분 환불 (라인 단위, ORDER_CANCEL)
@@ -120,6 +121,7 @@ CREDIT PROMOTION_FUNDING  refundDiscount
 
 - **상태 전이**: `Order.refundedAmount` 누산기가 결정한다. 누적 환불 gross가 `total`과 같아지면 `REFUNDED`, 아니면 `PARTIALLY_REFUNDED`. 환불 라인은 `OrderLine.refunded` 플래그로 표시한다. 누산값 변경이 `orders` 행에 versioned UPDATE를 유발해, 같은 주문의 동시 환불을 `@Version` 낙관락으로 직렬화한다(상태 고착 방지).
 - **전액 환불 시**: 모든 라인이 환불되면 배분 합이 원값과 일치하므로 계정별 net이 **0으로 복귀** — 전체 취소(2절)와 동일한 재무 결과.
+- **쿠폰·예산 유지**: 환불은 쿠폰을 되살리지 않고 예약 예산도 되돌리지 않는다(취소와 달리 **소진 유지**). 재무적으로는 `PROMOTION_FUNDING` 출연만 환입하고, 쿠폰 status·예산 카운터는 그대로 둔다 — 이행된 주문의 단일 사용 쿠폰이 환불로 부활하지 않게 하는 의도적 비대칭.
 - **정산 반영**: `sumSellerSalesInPeriod`은 **환불 라인(`ol.refunded`)을 제외**하고, 부분환불 주문(`PARTIALLY_REFUNDED`)의 **잔여 라인은 포함**한다(주문 상태 `PAID`·`PARTIALLY_REFUNDED`만 합산). 따라서 환불된 매출은 판매자 정산에서 자동으로 빠진다.
 - **경계**: 배분 결과 `net=0`인 라인, `paid=0`(100% 할인) 등에서 0원 leg는 기록하지 않는다(`원장 amount>0` 불변식). 거래 금액은 항상 `refundGross`(>0)를 쓴다.
 

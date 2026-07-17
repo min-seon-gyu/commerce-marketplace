@@ -88,7 +88,7 @@
 - **Coupon**: 회원에게 발급된 쿠폰(`ISSUED → REDEEMED / EXPIRED`).
 - **체크아웃 할인**: 주문 시 `couponId`(optional)로 쿠폰을 적용한다(무쿠폰 주문은 하위호환). 검증 순서는 소유(본인, 위반 시 `ACCESS_DENIED`)·상태 `ISSUED`·미만료·프로모션 활성·최소결제 충족(`MIN_SPEND_NOT_MET`)·1인 한도(`REDEEMED` 카운트, `COUPON_USAGE_LIMIT_EXCEEDED`)다. 할인액 `D = promotion.calculateDiscount(total).min(total)`(주문총액 초과 불가, 정률은 0원 단위 내림). 결제 확정 시 쿠폰은 같은 트랜잭션에서 `ISSUED → REDEEMED`로 전이한다.
 - 예산은 Redis-Lua 원자 카운터로 초과를 막는다(예산 원자 제어). 체크아웃 시 트랜잭션 **밖에서** 예산을 원자 예약(reserve)하고, 다운스트림 실패 시 반환(release)해 보상한다. 쿠폰 **발급**은 멱등(`@Idempotent`)이다.
-- 취소·환불은 쿠폰을 되살리지 않는다(단일 사용 쿠폰이 부활하지 않도록 하는 의도적 단순화).
+- **취소는 쿠폰 복원, 환불은 유지(의도적 비대칭)**: 발송 전 전체 취소(`cancelOrder`)는 사용 쿠폰을 `REDEEMED → ISSUED`로 되살리고 예약 예산도 `release`한다(주문 미이행 → 혜택 반환). 반면 배송완료 후 반품 환불(`refundLines`)은 쿠폰·예산을 **소진 유지**한다 — 이행된 주문의 단일 사용 쿠폰이 환불로 부활하지 않도록 하는 의도적 단순화(필요 시 재발급으로 보상).
 
 ## 거래 (transaction)
 
