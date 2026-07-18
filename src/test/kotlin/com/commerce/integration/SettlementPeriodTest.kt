@@ -1,8 +1,11 @@
 package com.commerce.integration
 
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
 import com.commerce.seller.application.SettlementService
 import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
@@ -61,5 +64,34 @@ class SettlementPeriodTest : IntegrationTestSupport() {
         settlement.periodStart shouldBe today
         settlement.periodEnd shouldBe today
         settlement.totalAmount.compareTo(BigDecimal("5000")) shouldBe 0
+    }
+
+    @Test
+    fun `explicit period not aligned to the seller's cycle is rejected`() {
+        val sellerId = setupAndSell("MONTHLY", BigDecimal("10000"))
+        val today = LocalDate.now()
+
+        // 월간 판매자에게 월 중간까지 자른 임의 구간(1일~12일) — periodEnd를 과거로 만들어
+        // 주기 종료 확정 게이트를 우회하는 경로가 막혀야 한다.
+        val ex = shouldThrow<BusinessException> {
+            settlementService.calculate(sellerId, today.withDayOfMonth(1), today.withDayOfMonth(12))
+        }
+
+        ex.errorCode shouldBe ErrorCode.SETTLEMENT_PERIOD_MISMATCH
+    }
+
+    @Test
+    fun `batch targets the most recently ended period, not the in-progress one`() {
+        val sellerId = setupAndSell("MONTHLY", BigDecimal("10000"))
+
+        // 3/13 기준 실행 — 3월 주기는 진행 중이므로 직전 주기(2월)를 대상으로 만든다.
+        val midMonth = settlementService.buildSettlementForBatch(sellerId, LocalDate.of(2026, 3, 13))!!
+        midMonth.periodStart shouldBe LocalDate.of(2026, 2, 1)
+        midMonth.periodEnd shouldBe LocalDate.of(2026, 2, 28)
+
+        // ref가 주기 마지막 날(3/31)이면 그 주기가 대상 — 4/1 03:00 실행(ref=전일)이 3월 정산을 만든다.
+        val atBoundary = settlementService.buildSettlementForBatch(sellerId, LocalDate.of(2026, 3, 31))!!
+        atBoundary.periodStart shouldBe LocalDate.of(2026, 3, 1)
+        atBoundary.periodEnd shouldBe LocalDate.of(2026, 3, 31)
     }
 }

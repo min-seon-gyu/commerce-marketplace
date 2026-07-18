@@ -7,12 +7,16 @@ import com.commerce.support.IntegrationTestSupport
 import com.commerce.support.TestFixtures
 import com.commerce.transaction.domain.TransactionType
 import com.commerce.transaction.infrastructure.TransactionJpaRepository
+import com.commerce.common.exception.BusinessException
+import com.commerce.common.exception.ErrorCode
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import java.math.BigDecimal
 import java.time.LocalDate
+import java.time.ZoneId
 
 /**
  * 정산 확정 검증:
@@ -38,9 +42,11 @@ class SettlementConfirmTest : IntegrationTestSupport() {
         sellerId = seller.id
     }
 
+    // 확정은 주기 종료 후에만 가능하므로 지난달(KST) 기간을 쓴다.
+    // 정산액은 누적 순정산(cumulativeNet)이라 기간과 무관 — 오늘 발생한 매출도 그대로 잡힌다.
     private fun monthRange(): Pair<LocalDate, LocalDate> {
-        val today = LocalDate.now()
-        return today.withDayOfMonth(1) to today.withDayOfMonth(today.lengthOfMonth())
+        val lastMonth = LocalDate.now(ZoneId.of("Asia/Seoul")).minusMonths(1)
+        return lastMonth.withDayOfMonth(1) to lastMonth.withDayOfMonth(lastMonth.lengthOfMonth())
     }
 
     @Test
@@ -85,5 +91,21 @@ class SettlementConfirmTest : IntegrationTestSupport() {
         // 확정 시 재계산으로 취소된 주문분이 제외되어 과지급되지 않는다.
         confirmed.totalAmount.compareTo(BigDecimal.ZERO) shouldBe 0
         confirmed.status shouldBe SettlementStatus.CONFIRMED
+    }
+
+    @Test
+    fun `cannot confirm a settlement whose period has not ended`() {
+        fixtures.sellerSale(memberId, sellerId, BigDecimal("10000"))
+
+        // 이번 달(진행 중인 주기) 정산 — 월간 정산을 달 중간에 확정할 수 없다.
+        val today = LocalDate.now(ZoneId.of("Asia/Seoul"))
+        val settlement = settlementService.calculate(
+            sellerId, today.withDayOfMonth(1), today.withDayOfMonth(today.lengthOfMonth()),
+        )
+
+        val ex = shouldThrow<BusinessException> { settlementService.confirm(settlement.id) }
+
+        ex.errorCode shouldBe ErrorCode.SETTLEMENT_PERIOD_NOT_ENDED
+        settlementService.getById(settlement.id).status shouldBe SettlementStatus.PENDING
     }
 }

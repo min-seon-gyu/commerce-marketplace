@@ -108,6 +108,8 @@
 - 정산액 = 기간 내 **유효 주문(`PAID`·`PARTIALLY_REFUNDED`)의 OrderLine 금액을 판매자별 합산**한다. 환불된 라인(`OrderLine.refunded`)과 전액취소(`CANCELLED`)·전액환불(`REFUNDED`) 주문은 제외되고, 부분환불 주문의 잔여(미환불) 라인은 포함된다.
 - 정산 주기(일/주/월)는 `seller.settlementPeriod`에서 KST 역월 기준으로 산출한다. `(seller, periodStart, periodEnd)` 유니크로 중복 정산 방지.
 - 확정(`confirm`) 시점에 정산액을 **재계산**한다(스냅샷 신뢰 금지) — calculate 이후 취소·환불된 주문분을 과지급하지 않기 위함.
+- **주기 종료 게이트**: 확정은 `periodEnd` **다음 날(KST)부터**만 허용한다(`SETTLEMENT_PERIOD_NOT_ENDED`) — 월간 정산을 달 중간에 확정하는 조기 지급을 차단한다.
+- **생성도 주기 종료 후**: 결산 배치는 기준일 기준 **가장 최근에 끝난 주기**의 정산만 생성한다(진행 중 주기는 제외, 매일 실행이 경계일 실패를 자가 치유). 수동 calculate의 명시 기간도 판매자 주기 경계와 일치해야 한다(`SETTLEMENT_PERIOD_MISMATCH`) — 임의 구간으로 확정 게이트를 우회하는 경로 차단.
 
 ---
 
