@@ -262,7 +262,7 @@ class OrderService(
 
         // 라인별 할인·포인트 배분(전체 라인 기준, 인덱스 결정적) → 환불 대상 합산.
         val lineAmounts = allLines.map { it.lineAmount }
-        val discountPerLine = allocate(lineAmounts, order.discountAmount, order.totalAmount, 2)
+        val discountPerLine = allocate(lineAmounts, order.discountAmount, order.totalAmount, 0)
         val netPerLine = allLines.indices.map { lineAmounts[it] - discountPerLine[it] }
         // 포인트 배분의 총량은 적립 당시 기록된 원 적립액(EARN 합)을 쓴다. 현재 earn-rate로 재계산하면
         // 구매 이후 요율이 바뀐 경우 역적립이 원 적립과 어긋난다(전액취소 reverseEarn과 동일 소스).
