@@ -31,7 +31,8 @@ class SettlementClawbackTest : IntegrationTestSupport() {
 
     @Test
     fun `refund after a settled order is clawed back from the seller's next settlement`() {
-        val seller = fixtures.createSeller(fixtures.createMember())
+        // 단일일 정산 구간을 쓰므로 DAILY 판매자 — 명시 기간은 정산주기 경계와 일치해야 한다.
+        val seller = fixtures.createSeller(fixtures.createMember(), "DAILY")
         val buyer = fixtures.createMember()
 
         // P1: 주문 A 10,000 → 정산 확정(판매자 10,000 지급)
@@ -55,7 +56,7 @@ class SettlementClawbackTest : IntegrationTestSupport() {
 
     @Test
     fun `deficit carries when refunds exceed new sales - no settlement is created`() {
-        val seller = fixtures.createSeller(fixtures.createMember())
+        val seller = fixtures.createSeller(fixtures.createMember(), "DAILY")
         val buyer = fixtures.createMember()
 
         // 주문 A 10,000 정산·지급

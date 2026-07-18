@@ -23,6 +23,8 @@ enum class ErrorCode(
     // Seller
     SELLER_NOT_APPROVED(HttpStatus.BAD_REQUEST, "승인된 판매자이 아닙니다"),
     INVALID_STATE_TRANSITION(HttpStatus.BAD_REQUEST, "허용되지 않은 상태 전이입니다"),
+    SETTLEMENT_PERIOD_NOT_ENDED(HttpStatus.BAD_REQUEST, "정산 주기가 종료된 후에만 확정할 수 있습니다"),
+    SETTLEMENT_PERIOD_MISMATCH(HttpStatus.BAD_REQUEST, "정산 기간이 판매자의 정산주기 경계와 일치하지 않습니다"),
 
     // Product / Inventory
     DUPLICATE_SKU_CODE(HttpStatus.CONFLICT, "이미 존재하는 SKU 코드입니다"),

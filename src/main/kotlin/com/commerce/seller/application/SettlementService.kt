@@ -52,14 +52,20 @@ class SettlementService(
     }
 
     /**
-     * 결산 배치용: 기준일이 속한 정산 구간의 **미저장** Settlement를 만든다(중복 또는 순정산액 0 이하면 null=스킵).
+     * 결산 배치용: 기준일 기준 **가장 최근에 끝난** 정산 구간의 미저장 Settlement를 만든다
+     * (중복 또는 순정산액 0 이하면 null=스킵). 진행 중인 주기는 대상이 아니다 — 정산은 주기 종료 후에만
+     * 생성한다. 배치가 매일 돌므로 경계일 실행이 실패해도 다음 실행이 같은 주기를 다시 시도한다(자가 치유).
      * calculate()와 달리 예외를 던지지 않아 청크 처리에서 head-of-line 없이 다음 판매자으로 진행한다.
      * 자체 read-only tx 안에서 판매자를 로드해 정산주기를 읽는다.
      */
     @Transactional(readOnly = true)
     fun buildSettlementForBatch(sellerId: Long, referenceDate: LocalDate): Settlement? {
         val seller = sellerRepository.findById(sellerId).orElse(null) ?: return null
-        val (start, end) = resolvePeriod(seller.settlementPeriod, referenceDate)
+        // ref가 속한 주기가 아직 진행 중이면(periodEnd > ref) 직전 주기로 물러난다.
+        val current = resolvePeriod(seller.settlementPeriod, referenceDate)
+        val (start, end) = if (current.second > referenceDate) {
+            resolvePeriod(seller.settlementPeriod, current.first.minusDays(1))
+        } else current
 
         // 재실행 안전: 같은 구간 정산이 이미 있으면 스킵(unique 제약과 이중 방어).
         if (settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, start, end) != null) return null
@@ -100,6 +106,13 @@ class SettlementService(
 
     @Transactional
     fun calculate(sellerId: Long, periodStart: LocalDate, periodEnd: LocalDate): Settlement {
+        val seller = sellerRepository.findById(sellerId)
+            .orElseThrow { BusinessException(ErrorCode.ENTITY_NOT_FOUND) }
+        // 명시 기간도 판매자 정산주기 경계와 일치해야 한다 — 임의 구간(예: 월 중간까지 자른 3/1~3/12)으로
+        // periodEnd를 과거로 만들어 주기 종료 확정 게이트를 우회하는 경로를 차단한다.
+        if (resolvePeriod(seller.settlementPeriod, periodStart) != (periodStart to periodEnd))
+            throw BusinessException(ErrorCode.SETTLEMENT_PERIOD_MISMATCH)
+
         // Check duplicate
         settlementRepository.findBySellerIdAndPeriodStartAndPeriodEnd(sellerId, periodStart, periodEnd)
             ?.let { throw BusinessException(ErrorCode.INVALID_INPUT, "이미 해당 기간 정산이 존재합니다") }
@@ -121,7 +134,7 @@ class SettlementService(
         // 확정 시점에 누적 순정산액을 재계산한다(스냅샷 신뢰 금지). 이 정산은 아직 CONFIRMED/PAID가 아니므로
         // 확정정산 합계에서 제외되어 이중 계산되지 않는다. 확정 이후 취소·환불(clawback)이 자동 반영된다.
         val net = cumulativeNet(settlement.sellerId)
-        settlement.confirm()
+        settlement.confirm(LocalDate.now(KST)) // 주기 종료 후에만 확정 가능(KST 기준)
         settlement.totalAmount = net
 
         // 0원 이하(신규 순정산 없음/이월)면 원장 분개·거래를 만들지 않는다 — Transaction은 양수 금액만 허용하므로

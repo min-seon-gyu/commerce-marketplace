@@ -38,9 +38,16 @@ class Settlement(
     var disputeReason: String? = null,
 ) : BaseEntity() {
 
-    fun confirm() {
+    /**
+     * 확정. 정산 주기가 끝난 뒤([periodEnd] 다음 날부터)에만 허용한다 — 주기 중 확정은
+     * 남은 기간의 매출·환불이 반영되기 전의 조기 지급 확정이 된다(예: 월간 정산을 3/13에 확정).
+     * @param today 확정 기준일(KST)
+     */
+    fun confirm(today: LocalDate) {
         if (status != SettlementStatus.PENDING && status != SettlementStatus.DISPUTED)
             throw BusinessException(ErrorCode.INVALID_STATE_TRANSITION)
+        if (!today.isAfter(periodEnd))
+            throw BusinessException(ErrorCode.SETTLEMENT_PERIOD_NOT_ENDED)
         status = SettlementStatus.CONFIRMED
         disputeReason = null
     }

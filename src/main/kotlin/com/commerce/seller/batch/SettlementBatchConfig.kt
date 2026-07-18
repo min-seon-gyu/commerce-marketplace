@@ -33,7 +33,7 @@ import java.time.LocalDate
  * 결산 주기 일괄 정산 배치.
  *
  * 기준일(referenceDate) 파라미터로 **APPROVED 판매자 전체**를 청크 처리하며, 각 판매자의 정산주기(일/주/월)에 맞춰
- * 해당 구간의 정산(PENDING)을 생성한다. 재실행 안전(멱등: 구간 중복 스킵 + unique 제약), 0원 스킵, 단건 실패 skip(격리)로
+ * 기준일 기준 **가장 최근에 끝난 구간**의 정산(PENDING)을 생성한다(진행 중 주기는 제외). 재실행 안전(멱등: 구간 중복 스킵 + unique 제약), 0원 스킵, 단건 실패 skip(격리)로
  * 대량 결산이 중단 없이 완주하도록 설계했다. 확정·원장분개·지급은 승인이 필요한 별도 액션으로 남긴다(정산 관행).
  *
  * 스키마는 Flyway V8이 소유(spring.batch.jdbc.initialize-schema=never), 起動 자동 실행은 끔(spring.batch.job.enabled=false).
