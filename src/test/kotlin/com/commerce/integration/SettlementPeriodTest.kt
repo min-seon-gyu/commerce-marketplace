@@ -94,4 +94,19 @@ class SettlementPeriodTest : IntegrationTestSupport() {
         atBoundary.periodStart shouldBe LocalDate.of(2026, 3, 1)
         atBoundary.periodEnd shouldBe LocalDate.of(2026, 3, 31)
     }
+
+    @Test
+    fun `weekly batch targets the previous week until the week ends`() {
+        val sellerId = setupAndSell("WEEKLY", BigDecimal("7000"))
+
+        // 수요일(2026-03-11) 기준 실행 — 이번 주(3/9 월~3/15 일)는 진행 중이므로 지난주(3/2~3/8)를 대상으로 만든다.
+        val midWeek = settlementService.buildSettlementForBatch(sellerId, LocalDate.of(2026, 3, 11))!!
+        midWeek.periodStart shouldBe LocalDate.of(2026, 3, 2)
+        midWeek.periodEnd shouldBe LocalDate.of(2026, 3, 8)
+
+        // ref가 일요일(3/15)이면 그 주가 대상 — 월요일 03:00 실행(ref=전일)이 직전 주 정산을 만든다.
+        val atBoundary = settlementService.buildSettlementForBatch(sellerId, LocalDate.of(2026, 3, 15))!!
+        atBoundary.periodStart shouldBe LocalDate.of(2026, 3, 9)
+        atBoundary.periodEnd shouldBe LocalDate.of(2026, 3, 15)
+    }
 }
