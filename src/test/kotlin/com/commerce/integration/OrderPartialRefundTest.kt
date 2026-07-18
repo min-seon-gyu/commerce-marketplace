@@ -170,7 +170,7 @@ class OrderPartialRefundTest : IntegrationTestSupport() {
         val order = orderService.placeOrder(buyerId, coupon.id)
         order.paidAmount.compareTo(BigDecimal("1")) shouldBe 0
         val paymentTxId = order.paymentTransactionId!!
-        val line1 = orderLineRepository.findByOrderId(order.id).first { it.skuId == sku1 } // 배분: net 0, discount 1.00
+        val line1 = orderLineRepository.findByOrderId(order.id).first { it.skuId == sku1 } // 배분: net 0, discount 1
 
         // net=0 라인 단독 환불 — 예외 없이 성공(현금 leg 생략, 출연 leg만)
         orderService.refundLines(buyerId, order.id, listOf(line1.id))
@@ -179,7 +179,7 @@ class OrderPartialRefundTest : IntegrationTestSupport() {
         stockService.getBySkuId(sku1).quantity shouldBe 100 // 복원됨
         val comp1 = compTxIds(paymentTxId)
         sumSide(comp1, AccountCode.CUSTOMER_CASH, LedgerEntrySide.CREDIT).compareTo(BigDecimal.ZERO) shouldBe 0 // 현금 leg 없음
-        sumSide(comp1, AccountCode.PROMOTION_FUNDING, LedgerEntrySide.CREDIT).compareTo(BigDecimal("1")) shouldBe 0 // 출연 1.00 환입
+        sumSide(comp1, AccountCode.PROMOTION_FUNDING, LedgerEntrySide.CREDIT).compareTo(BigDecimal("1")) shouldBe 0 // 출연 1원 환입
         verificationService.verify().isBalanced.shouldBeTrue()
 
         // 나머지 라인까지 환불 → 전액 환불, 각 계정 net 0 복귀
