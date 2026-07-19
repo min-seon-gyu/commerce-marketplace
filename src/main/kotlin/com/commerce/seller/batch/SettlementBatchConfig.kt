@@ -13,7 +13,6 @@ import org.springframework.batch.core.Job
 import org.springframework.batch.core.Step
 import org.springframework.batch.core.configuration.annotation.StepScope
 import org.springframework.batch.core.job.builder.JobBuilder
-import org.springframework.batch.core.launch.support.RunIdIncrementer
 import org.springframework.batch.core.repository.JobRepository
 import org.springframework.batch.core.step.builder.StepBuilder
 import org.springframework.batch.core.step.tasklet.Tasklet
@@ -59,7 +58,6 @@ class SettlementBatchConfig(
     @Bean
     fun settlementJob(calculateSettlementStep: Step, verifySettlementStep: Step): Job =
         JobBuilder(JOB_NAME, jobRepository)
-            .incrementer(RunIdIncrementer()) // 같은 referenceDate 재실행 허용(run.id로 인스턴스 구분), 멱등은 processor가 보장
             .start(calculateSettlementStep)
             .next(verifySettlementStep)
             .build()
