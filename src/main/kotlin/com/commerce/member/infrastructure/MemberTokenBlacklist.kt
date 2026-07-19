@@ -3,9 +3,9 @@ package com.commerce.member.infrastructure
 import com.commerce.member.domain.event.MemberSuspendedEvent
 import com.commerce.member.domain.event.MemberUnsuspendedEvent
 import com.commerce.member.domain.event.MemberWithdrawnEvent
-import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.event.TransactionPhase
 import org.springframework.transaction.event.TransactionalEventListener
@@ -22,7 +22,7 @@ import java.time.Duration
  */
 @Component
 class MemberTokenBlacklist(
-    private val redisson: RedissonClient,
+    private val redisTemplate: StringRedisTemplate,
     @Value("\${jwt.expiration:86400000}") private val tokenTtlMs: Long,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
@@ -32,7 +32,7 @@ class MemberTokenBlacklist(
     /** 해당 회원의 토큰이 무효화(정지/탈퇴)되었는지. Redis 장애 시 false(허용). */
     fun isBlocked(memberId: Long): Boolean =
         try {
-            redisson.getBucket<String>(key(memberId)).get() != null
+            redisTemplate.hasKey(key(memberId))
         } catch (e: Exception) {
             log.warn("Token blacklist check failed for member {} (allowing): {}", memberId, e.message)
             false
@@ -49,7 +49,7 @@ class MemberTokenBlacklist(
 
     private fun block(memberId: Long) {
         try {
-            redisson.getBucket<String>(key(memberId)).set("1", Duration.ofMillis(tokenTtlMs))
+            redisTemplate.opsForValue().set(key(memberId), "1", Duration.ofMillis(tokenTtlMs))
         } catch (e: Exception) {
             log.warn("Failed to blacklist member {}: {}", memberId, e.message)
         }
@@ -57,7 +57,7 @@ class MemberTokenBlacklist(
 
     private fun unblock(memberId: Long) {
         try {
-            redisson.getBucket<String>(key(memberId)).delete()
+            redisTemplate.delete(key(memberId))
         } catch (e: Exception) {
             log.warn("Failed to un-blacklist member {}: {}", memberId, e.message)
         }
