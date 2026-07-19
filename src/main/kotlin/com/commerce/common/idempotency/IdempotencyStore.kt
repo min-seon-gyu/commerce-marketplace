@@ -1,7 +1,7 @@
 package com.commerce.common.idempotency
 
-import org.redisson.api.RedissonClient
 import org.slf4j.LoggerFactory
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.stereotype.Component
 import org.springframework.transaction.annotation.Transactional
 import java.time.Duration
@@ -18,7 +18,7 @@ data class CachedResponse(val status: Int, val body: String)
  */
 @Component
 class IdempotencyStore(
-    private val redissonClient: RedissonClient,
+    private val redisTemplate: StringRedisTemplate,
     private val repository: IdempotencyRepository,
 ) {
     private val redisTtl = Duration.ofHours(24)
@@ -30,7 +30,7 @@ class IdempotencyStore(
      */
     fun findCachedResponse(key: String): CachedResponse? {
         return try {
-            redissonClient.getBucket<String>(redisKey(key)).get()?.let { parse(it) }
+            redisTemplate.opsForValue().get(redisKey(key))?.let { parse(it) }
         } catch (e: Exception) {
             log.warn("Redis lookup failed for idempotency key {}, falling back to DB: {}", key, e.message)
             null
@@ -85,7 +85,7 @@ class IdempotencyStore(
     /** Redis 캐시 기록 — 실패는 로깅만 하고 무시(DB가 source of truth) */
     private fun cacheQuietly(key: String, status: Int, body: String) {
         try {
-            redissonClient.getBucket<String>(redisKey(key)).set("$status|$body", redisTtl)
+            redisTemplate.opsForValue().set(redisKey(key), "$status|$body", redisTtl)
         } catch (e: Exception) {
             log.warn("Failed to cache idempotency key {} in Redis: {}", key, e.message)
         }
