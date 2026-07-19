@@ -5,9 +5,8 @@ import com.commerce.product.interfaces.ProductDetailResponse
 import com.commerce.support.IntegrationTestSupport
 import io.kotest.matchers.shouldBe
 import org.junit.jupiter.api.Test
-import org.redisson.api.RedissonClient
-import org.redisson.client.codec.StringCodec
 import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
  * 상품 상세 캐시의 회복력·동작 검증.
@@ -17,7 +16,7 @@ import org.springframework.beans.factory.annotation.Autowired
 class ProductDetailCacheTest : IntegrationTestSupport() {
 
     @Autowired lateinit var cache: ProductDetailCache
-    @Autowired lateinit var redisson: RedissonClient
+    @Autowired lateinit var redisTemplate: StringRedisTemplate
 
     private val base = 90_000_000L
 
@@ -49,7 +48,7 @@ class ProductDetailCacheTest : IntegrationTestSupport() {
     fun `corrupt cached json falls back to null instead of throwing`() {
         val id = base + 3
         // 스키마 불일치/깨진 JSON을 직접 심어도 get은 예외 없이 null(→ DB 폴백)을 반환해야 한다.
-        redisson.getBucket<String>("product:detail:$id", StringCodec.INSTANCE).set("{not-valid-json")
+        redisTemplate.opsForValue().set("product:detail:$id", "{not-valid-json")
 
         cache.get(id) shouldBe null
     }
